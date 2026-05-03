@@ -1,0 +1,6 @@
+ # Web arayüzü şablonları
+recursive-include app/web/templates *
+# Web arayüzü statik dosyaları (CSS, JS)
+recursive-include app/web/static *
+# Scraping profilleri
+recursive-include app/downloaders *.json
