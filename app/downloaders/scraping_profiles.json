@@ -1,0 +1,62 @@
+{
+  "_comment": "Her sağlayıcı için kazıma profilleri. Bir web sitesi yapısını değiştirdiğinde, kod yerine sadece bu dosyayı düzenleyin.",
+
+  "adetsis": {
+    "name": "Adetsis Görüntüleyici",
+    "type": "aspnet_form",
+    "description": "Görüntüleyici sayfasından PDF indirmek için ASP.NET form gönderimi simülasyonu",
+    "url_pattern": "https?://musteri\\.adetsis\\.com/PdfViewer\\.aspx\\?[^\\s\"'<>]+",
+    "form_selector": "#form1",
+    "submit_fields": {
+      "__EVENTTARGET": "PdfDownloader",
+      "__EVENTARGUMENT": ""
+    },
+    "timeout": 60
+  },
+
+  "artibel": {
+    "name": "Artibel Yönlendirme",
+    "type": "direct_download",
+    "description": "Yönlendirmeyi takip eden doğrudan PDF indirme işlemi",
+    "url_pattern": "https?://r\\.artibel\\.com\\.tr/b/[a-zA-Z0-9]+",
+    "timeout": 30
+  },
+
+  "mmo": {
+    "name": "MMO Rapor Servisi",
+    "type": "mmo_multi_step",
+    "description": "Çok aşamalı indirme: CSRF belirteci alma → sorgulama → her asansör raporunun indirilmesi",
+    "base_url": "https://makina.mmo.org.tr/akm",
+    "csrf_page": "/rapor-ara",
+    "query_endpoint": "/basvuru-sorgula",
+    "download_endpoint": "/rapor",
+    "csrf_selector": "meta[name='csrf-token']",
+    "id_fields_in_email": {
+      "bina_id": "Bina Id\\s*:\\s*(\\d+)",
+      "basvuru_id": "Basvuru Id\\s*:\\s*(\\d+)"
+    },
+    "query_payload_template": {
+      "_token": "{csrf_token}",
+      "bina_id": "{bina_id}",
+      "basvuru_id": "{basvuru_id}"
+    },
+    "report_id_selector": "input[name='kontrol_id']",
+    "download_payload_template": {
+      "_token": "{csrf_token}",
+      "g-recaptcha-response": "akm",
+      "kontrol_id": "{kontrol_id}"
+    },
+    "timeout": 60
+  },
+
+  "optimaldenge": {
+    "name": "Optimal Denge Portal",
+    "type": "html_scrape_download",
+    "description": "Rapor sayfasını ziyaret et, HTML içindeki PDF bağlantısını bul ve indir",
+    "url_pattern": "https?://(?:www\\.)?optimaldenge\\.pro/asansor_denetim_rapor_print\\.aspx\\?[^\\s\"'<>]+",
+    "base_url": "https://optimaldenge.pro",
+    "pdf_link_selector": "a[download]",
+    "pdf_link_attr": "href",
+    "timeout": 120
+  }
+}
