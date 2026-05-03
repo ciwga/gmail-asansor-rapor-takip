@@ -1,0 +1,257 @@
+"""
+Randevu e-posta ayrıştırıcı modülü.
+PDF eki içermeyen randevu bildirim e-postalarından bina adı ve kontrol tarihi verilerini ayıklar.
+"""
+
+import re
+from datetime import datetime
+from typing import List, Optional, Dict, Any, Set
+
+from app.utils.logging import get_logger
+from app.utils.patterns import (
+    DATE_PATTERN_DMY, ILCE_PATTERN, ILCE_KNT_PATTERN,
+    PHONE_PATTERN, PHONE_PATTERN_10_11, PERSON_ASN_PATTERN,
+    KID_PATTERN_PAREN, KID_PATTERN_BARE, KID_PATTERN_NUMERIC,
+    ARTIBEL_BUILDING_PATTERN,
+    MMO_BINA_ADI_PATTERN, MMO_KONTROL_TARIHI_PATTERN, MMO_BINA_ID_PATTERN,
+)
+
+log: Any = get_logger(__name__)
+
+_ILCE_PAT: str = ILCE_PATTERN.pattern
+
+
+def parse_appointment(content: str, subject: str, sender: str, date_ms: int) -> Optional[List[Dict[str, Any]]]:
+    """Randevu e-postasını metin içeriğinden ayrıştırarak verileri çıkarır.
+    
+    Args:
+        content (str): E-posta gövdesinin ham metin içeriği.
+        subject (str): E-posta konu başlığı.
+        sender (str): Gönderici e-posta adresi.
+        date_ms (int): E-postanın alınma zamanı (milisaniye).
+        
+    Returns:
+        Optional[List[Dict[str, Any]]]: Bulunan randevu verilerinin listesi veya hiçbir şey bulunamazsa None.
+    """
+    try:
+        sender_lower: str = sender.lower()
+        results: List[Dict[str, Any]] = []
+
+        if "mmo.org.tr" in sender_lower:
+            results = _parse_mmo(content)
+        elif "asansorkontrol" in sender_lower:
+            results = _parse_asansor_kontrol(content)
+        elif "artibel" in sender_lower:
+            results = _parse_artibel(content)
+        elif "optimaldenge" in sender_lower or "milenyum" in sender_lower:
+            results = _parse_optimal_denge(content, subject)
+
+        return results if results else None
+    except Exception as e:
+        log.error(f"Randevu ayrıştırma genel hatası: {e}", exc_info=True)
+        return None
+
+
+def _parse_mmo(content: str) -> List[Dict[str, Any]]:
+    """MMO (Makina Mühendisleri Odası) randevu formatını ayrıştırır.
+
+    Args:
+        content (str): E-posta metni.
+
+    Returns:
+        List[Dict[str, Any]]: Ayrıştırılmış randevu listesi.
+    """
+    results: List[Dict[str, Any]] = []
+    
+    bina_m: Optional[re.Match] = MMO_BINA_ADI_PATTERN.search(content)
+    tarih_m: Optional[re.Match] = MMO_KONTROL_TARIHI_PATTERN.search(content)
+    bid_m: Optional[re.Match] = MMO_BINA_ID_PATTERN.search(content)
+
+    if bina_m and tarih_m:
+        building: str = re.sub(r"<[^>]+>", "", bina_m.group(1)).strip()
+        raw: str = tarih_m.group(1).strip()
+        tarih: str
+        
+        try:
+            tarih = datetime.strptime(raw, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except ValueError:
+            tarih = raw
+            
+        bid: str = bid_m.group(1) if bid_m else "N/A"
+        
+        results.append(_make_randevu(
+            f"RANDEVU_MMO_{bid}", "MMO (Randevu)", building,
+            tarih, f"RANDEVU-MMO-{bid}-{tarih.replace('.', '')}",
+        ))
+        
+    return results
+
+
+def _parse_asansor_kontrol(content: str) -> List[Dict[str, Any]]:
+    """Asansör Kontrol firmasının randevu formatını ayrıştırır.
+
+    Args:
+        content (str): E-posta metni.
+
+    Returns:
+        List[Dict[str, Any]]: Ayrıştırılmış randevu listesi.
+    """
+    results: List[Dict[str, Any]] = []
+
+    tarih_m: Optional[re.Match] = DATE_PATTERN_DMY.search(content)
+    if not tarih_m:
+        return results
+        
+    tarih: str = f"{tarih_m.group(1)}.{tarih_m.group(2)}.{tarih_m.group(3)}"
+    lines: List[str] = content.splitlines()
+    seen: Set[str] = set()
+
+    for line in lines:
+        normalized: str = re.sub(r"[\t ]+", " ", line).strip()
+        if not normalized:
+            continue
+
+        if not ILCE_KNT_PATTERN.search(normalized):
+            continue
+
+        before_ilce: str = re.split(_ILCE_PAT, normalized, flags=re.IGNORECASE)[0]
+        kid_m: Optional[re.Match] = KID_PATTERN_NUMERIC.search(before_ilce)
+        kid: str = kid_m.group(1).replace("/", "-") if kid_m else "N/A"
+
+        clean: str = before_ilce
+        clean = PERSON_ASN_PATTERN.sub("", clean)
+        clean = re.sub(r"\(?\d+/\d+\)?\s*", "", clean)
+        clean = re.sub(r"\b0?\s*\d{3}\s*\d{3}\s*\d{2}\s*\d{2}\b", "", clean)
+        clean = PHONE_PATTERN_10_11.sub("", clean)
+        clean = re.sub(r"^\s*\d+\s+", "", clean)
+        clean = re.sub(r"\s+\d+\s*$", "", clean)
+        
+        if "/" in clean:
+            parts: List[str] = clean.split("/")
+            if parts[0].strip() and not parts[-1].strip().isdigit():
+                clean = parts[0]
+                
+        clean = re.sub(r"\s+", " ", clean).strip()
+
+        if len(clean) < 3 or clean in seen:
+            continue
+
+        seen.add(clean)
+        uid: str = f"RANDEVU-ASK-{kid}-{tarih.replace('.', '')}"
+        
+        results.append(_make_randevu(
+            f"RANDEVU_ASK_{kid}_{tarih.replace('.', '')}",
+            "Asansör Kontrol (Randevu)", clean, tarih, uid,
+        ))
+
+    return results
+
+
+def _parse_artibel(content: str) -> List[Dict[str, Any]]:
+    """Artıbel firmasının randevu formatını ayrıştırır.
+
+    Args:
+        content (str): E-posta metni.
+
+    Returns:
+        List[Dict[str, Any]]: Ayrıştırılmış randevu listesi.
+    """
+    results: List[Dict[str, Any]] = []
+    lines: List[str] = content.splitlines()
+    i: int = 0
+    
+    while i < len(lines):
+        date_m: Optional[re.Match] = re.match(r"\s*(\d{2}\.\d{2}\.\d{4})\s*$", lines[i].strip())
+        
+        if date_m:
+            tarih: str = date_m.group(1)
+            
+            for j in range(i + 1, min(i + 15, len(lines))):
+                bina_m: Optional[re.Match] = ARTIBEL_BUILDING_PATTERN.search(lines[j])
+                
+                if bina_m:
+                    raw: str = bina_m.group(1).strip()
+                    kid_m: Optional[re.Match] = re.search(r"\(([\d/]+)\)", raw)
+                    kid: str = kid_m.group(1).replace("/", "-") if kid_m else "N/A"
+                    building: str = re.sub(r"\([^)]+\)", "", raw).strip()
+                    
+                    results.append(_make_randevu(
+                        f"RANDEVU_ART_{kid}_{tarih.replace('.', '')}",
+                        "Artıbel (Randevu)", building, tarih,
+                        f"RANDEVU-ART-{kid}-{tarih.replace('.', '')}",
+                    ))
+                    break
+        i += 1
+        
+    return results
+
+
+def _parse_optimal_denge(content: str, subject: str) -> List[Dict[str, Any]]:
+    """Optimal Denge firmasının randevu formatını ayrıştırır.
+
+    Args:
+        content (str): E-posta metni.
+        subject (str): E-posta konu başlığı.
+
+    Returns:
+        List[Dict[str, Any]]: Ayrıştırılmış randevu listesi.
+    """
+    results: List[Dict[str, Any]] = []
+
+    sub_m: Optional[re.Match] = re.search(r"Randevu\s+(\d{1,2}\.\d{1,2}\.\d{4})\s+(.+)", subject or "", re.IGNORECASE)
+    bina_m: Optional[re.Match] = re.search(r"Bina\s*Ad[ıi]\s*:?\s*(.+?)(?:\n|$)", content, re.IGNORECASE)
+    tarih_m: Optional[re.Match] = re.search(r"Tarih\s*:?\s*(\d{1,2}\.\d{1,2}\.\d{4})", content, re.IGNORECASE)
+
+    building: Optional[str] = None
+    tarih: Optional[str] = None
+
+    if bina_m:
+        building = bina_m.group(1).strip().rstrip(".")
+    elif sub_m:
+        building = sub_m.group(2).strip().rstrip(".")
+
+    if tarih_m:
+        raw: str = tarih_m.group(1)
+        parts: List[str] = raw.split(".")
+        if len(parts) == 3:
+            tarih = f"{parts[0].zfill(2)}.{parts[1].zfill(2)}.{parts[2]}"
+    elif sub_m:
+        raw = sub_m.group(1)
+        parts = raw.split(".")
+        if len(parts) == 3:
+            tarih = f"{parts[0].zfill(2)}.{parts[1].zfill(2)}.{parts[2]}"
+
+    if building and tarih:
+        uid: str = f"RANDEVU-OPT-{building.replace(' ', '_')[:20]}-{tarih.replace('.', '')}"
+        
+        results.append(_make_randevu(
+            f"RANDEVU_OPT_{tarih.replace('.', '')}",
+            "Optimal Denge (Randevu)", building, tarih, uid,
+        ))
+
+    return results
+
+
+def _make_randevu(file_name: str, provider: str, building: str, tarih: str, uuid: str) -> Dict[str, Any]:
+    """Randevu verilerini içeren standart sonuç sözlüğünü oluşturur.
+
+    Args:
+        file_name (str): Sanal dosya adı.
+        provider (str): Raporu sağlayan kuruluş.
+        building (str): Bina adı.
+        tarih (str): Muayene tarihi.
+        uuid (str): Kayıt için benzersiz kimlik.
+
+    Returns:
+        Dict[str, Any]: Rapor veri modeline uygun sözlük yapısı.
+    """
+    return {
+        "file_name": file_name,
+        "provider": provider,
+        "building_name": building,
+        "label_color": "Randevu",
+        "inspection_date": tarih,
+        "next_inspection": tarih,
+        "elevator_number": "N/A",
+        "uuid": uuid,
+    }
