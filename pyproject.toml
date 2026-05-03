@@ -13,3 +13,6 @@ dynamic = ["dependencies"]
 
 [project.scripts]
 asansor-denetcisi = "run:main"
+
+[tool.setuptools]
+include-package-data = true

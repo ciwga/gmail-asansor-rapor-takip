@@ -334,24 +334,32 @@ def create_app() -> Tuple[Flask, SocketIO]:
     @app.route("/api/scraping-profiles", methods=["GET"])
     def get_profiles() -> Response:
         """Kazıma profillerini okur ve döndürür."""
-        profile_path: str = os.path.join("app", "downloaders", "scraping_profiles.json")
+        profile_path: Path = paths.SCRAPING_PROFILES
         try:
+            if not profile_path.exists():
+                log.warning(f"Profil dosyası mevcut dizinde bulunamadı: {profile_path}")
+                return jsonify({"error": "Scraping profili bulunamadı."}), 404
+
             with open(profile_path, "r", encoding="utf-8") as f:
                 return jsonify(json.load(f))
         except Exception as e:
+            log.error(f"Profil okuma hatası: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/scraping-profiles", methods=["POST"])
     def save_profiles() -> Response:
         """Kazıma profillerini günceller."""
-        profile_path: str = os.path.join("app", "downloaders", "scraping_profiles.json")
+        profile_path: Path = paths.SCRAPING_PROFILES
         try:
+            profile_path.parent.mkdir(parents=True, exist_ok=True)
+            
             with open(profile_path, "w", encoding="utf-8") as f:
                 json.dump(request.get_json(), f, ensure_ascii=False, indent=2)
             
             reload_profiles()
             return jsonify({"status": "saved"})
         except Exception as e:
+            log.error(f"Profil kaydetme hatası: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/pdfs", methods=["GET"])

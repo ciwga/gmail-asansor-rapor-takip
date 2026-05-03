@@ -6,10 +6,12 @@ yalnızca profil dosyasını düzenlemek yeterlidir.
 """
 
 import json
+import logging
 import os
 import re
 import uuid
 import html
+from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 from urllib.parse import urljoin
 
@@ -21,15 +23,16 @@ from app.downloaders.common import (
 )
 from app.utils.text import sanitize_filename
 from app.utils.logging import get_logger
+from app.paths import paths
 
-log: Any = get_logger(__name__)
+log: logging.Logger = get_logger(__name__)
 
 _profiles: Optional[Dict[str, Any]] = None
 
 
 def _load_profiles() -> Dict[str, Any]:
     """Kazıma profillerini yükler ve ilk çağrıdan sonra önbelleğe alır.
-
+    
     Returns:
         Dict[str, Any]: Yüklenen profil verilerini içeren sözlük.
     """
@@ -37,12 +40,11 @@ def _load_profiles() -> Dict[str, Any]:
     if _profiles is not None:
         return _profiles
 
-    profile_path: str = os.path.join(os.path.dirname(__file__), "scraping_profiles.json")
-    if not os.path.exists(profile_path):
-        log.warning("scraping_profiles.json bulunamadı, boş profil seti kullanılıyor.")
-        _profiles = {}
-        return _profiles
-
+    profile_path: Path = paths.SCRAPING_PROFILES
+    
+    if not profile_path.exists():
+        log.warning(f"scraping_profiles.json bulunamadı.")
+        assert "Scraping profili olmadan sistem çalışamaz."
     try:
         with open(profile_path, "r", encoding="utf-8") as f:
             data: Dict[str, Any] = json.load(f)
