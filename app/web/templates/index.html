@@ -13,7 +13,7 @@
       <button class="btn-icon" id="menuToggle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 22V2M15 22V2M3 7h18M3 12h18M3 17h18"/></svg><span>Asansör Rapor</span></div>
     </div>
-    <div class="topbar-right">
+    <div class="topbar-right" style="display: flex; align-items: center; gap: 10px;">
       <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Tema Değiştir">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
       </button>
@@ -141,6 +141,14 @@
             <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_archive"> Arşivle</label></div>
             <div class="cfg-row"><label>Worker</label><input type="number" id="cfg_workers" min="1" max="50" value="10" class="input-sm"></div>
             <div class="cfg-row"><label>Son X gün</label><input type="number" id="cfg_search_days" min="0" value="0" class="input-sm"></div>
+            
+            <!-- TARİH ARALIĞI FİLTRESİ -->
+            <div class="cfg-row" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+              <label class="cb"><input type="checkbox" id="cfg_date_filter_enabled"> Özel Tarih Aralığında Ara</label>
+            </div>
+            <div class="cfg-row"><label>Başlangıç</label><input type="date" id="cfg_date_start" class="input-sm"></div>
+            <div class="cfg-row"><label>Bitiş</label><input type="date" id="cfg_date_end" class="input-sm"></div>
+            <p class="hint-inline" style="margin-top:4px;">Not: Bu aktifse "Son X gün" kuralı dikkate alınmaz.</p>
           </div>
           <div class="cfg-section"><h3>Hedef Etiketler</h3><input type="text" id="cfg_target_labels" class="input-full" placeholder="Kırmızı Etiketli, Sarı Etiketli, Randevu"></div>
           <div class="cfg-section"><h3>Kaynaklar</h3>

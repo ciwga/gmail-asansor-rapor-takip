@@ -912,14 +912,14 @@ function browseFolder(id) {
   if (isSecure) {
     presets = [
       { label: '1) Mevcut Proje Klasörü (Tavsiye Edilir)', path: '.' + suffix },
-      { label: '2) Ev Dizini / Güvenli Alan', path: '~/AsansorRaporlari' + suffix }
+      { label: '2) Ev Dizini / Güvenli Alan', path: '~/' + suffix }
     ];
     msg = 'GÜVENLİK UYARISI: Bu dosya hassas veriler (Veritabanı/Log/Token) içerir.\nLütfen "İndirilenler" klasörünü KULLANMAYIN. Dışarıdan erişime kapalı güvenli bir alan seçin:\n\n';
   } else {
     presets = [
-      { label: '1) Android - İndirilenler (Termux Uyumlu)', path: '~/storage/downloads/AsansorRaporlari' + suffix },
+      { label: '1) Android - İndirilenler (Termux Uyumlu)', path: '~/storage/downloads' + suffix },
       { label: '2) Mevcut Proje Klasörü', path: '.' + suffix },
-      { label: '3) Bilgisayar Ana Dizini (Windows/Mac/Linux)', path: '~/Downloads/AsansorRaporlari' + suffix }
+      { label: '3) Bilgisayar Ana Dizini (Windows/Mac/Linux)', path: '~/Downloads' + suffix }
     ];
     msg = 'Bu klasör Raporlar, Çıktılar ve Manuel okumalar içindir. Rahat erişebileceğiniz bir yer seçin:\n\n';
   }
@@ -999,6 +999,13 @@ function loadConfig() {
       
       V('cfg_workers', s.num_workers || 10);
       V('cfg_search_days', s.search_days_before_today || 0);
+
+      // TARİH ARALIĞI FİLTRESİ
+      const df = s.date_range_filter || {};
+      C('cfg_date_filter_enabled', df.enabled);
+      V('cfg_date_start', df.start_date || '');
+      V('cfg_date_end', df.end_date || '');
+
       V('cfg_target_labels', (s.target_labels || []).join(', '));
       V('cfg_ex_keywords', (s.exceptional_keywords || []).join(', '));
       V('cfg_ex_senders', (s.exceptional_senders || []).join(', '));
@@ -1093,6 +1100,14 @@ function saveConfigForm() {
   c.search_settings.archive_after_processing = B('cfg_archive');
   c.search_settings.num_workers = parseInt(G('cfg_workers')) || 10;
   c.search_settings.search_days_before_today = parseInt(G('cfg_search_days')) || 0;
+  
+  // TARİH ARALIĞI FİLTRESİ
+  c.search_settings.date_range_filter = {
+    enabled: B('cfg_date_filter_enabled'),
+    start_date: G('cfg_date_start'),
+    end_date: G('cfg_date_end')
+  };
+
   c.search_settings.target_labels = csv('cfg_target_labels');
   c.search_settings.exceptional_keywords = csv('cfg_ex_keywords');
   c.search_settings.exceptional_senders = csv('cfg_ex_senders');
