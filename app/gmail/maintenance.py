@@ -8,15 +8,16 @@ ve API hatalarına karşı dayanıklılık katmanları içerir.
 
 import time
 import threading
-from typing import Dict, Callable, Any, List, Optional
+import logging
+from typing import Dict, Callable, Any, List, Optional, cast
 
-from googleapiclient.errors import HttpError
+from googleapiclient.errors import HttpError  # type: ignore
 
 from app.gmail.client import get_all_messages, BATCH_SIZE_MODIFY
 from app.utils.logging import get_logger
 from app.gmail.auth import authenticate
 
-log: Any = get_logger(__name__)
+log: logging.Logger = get_logger(__name__)
 
 _maintenance_lock: threading.Lock = threading.Lock()
 
@@ -29,8 +30,10 @@ def _batch_callback(request_id: str, response: Any, exception: Optional[Exceptio
         response (Any): API'den dönen yanıt nesnesi.
         exception (Optional[Exception]): Eğer bir hata oluştuysa ilgili istisna nesnesi.
     """
+    log.debug(f"Toplu işlem yanıt nesnesi (İstek {request_id}): {response}")
+    
     if exception:
-        if isinstance(exception, HttpError) and exception.resp.status == 429:
+        if isinstance(exception, HttpError) and cast(Any, exception).resp.status == 429:
             log.warning(f"Hız limitine takıldı - İstek kimliği: {request_id}")
         else:
             log.error(f"Toplu işlem hatası - İstek kimliği {request_id}: {exception}")
@@ -41,7 +44,7 @@ def run_rules_engine(
     settings: Dict[str, Any],
     labels_map: Dict[str, str],
     is_test: bool,
-    action_fn: Callable,
+    action_fn: Callable[[Any, str, Dict[str, Any], Dict[str, str]], Any],
 ) -> int:
     """Temizlik veya çöpe atma kurallarını yapılandırmaya göre işletir.
 
@@ -50,12 +53,14 @@ def run_rules_engine(
         settings (Dict[str, Any]): İlgili modun ayarları.
         labels_map (Dict[str, str]): Etiket haritası.
         is_test (bool): True ise gerçek işlem yapmaz, sadece log üretir.
-        action_fn (Callable): Her mesaj için oluşturulacak API isteğini belirleyen fonksiyon.
+        action_fn (Callable[[Any, str, Dict[str, Any], Dict[str, str]], Any]): 
+            Her mesaj için oluşturulacak API isteğini belirleyen fonksiyon.
 
     Returns:
         int: İşlemden etkilenen toplam mesaj sayısı.
     """
-    rules: List[Dict[str, Any]] = settings.get("cleanup_rules", settings.get("trash_rules", []))
+    raw_rules: Any = settings.get("cleanup_rules", settings.get("trash_rules", []))
+    rules: List[Dict[str, Any]] = cast(List[Dict[str, Any]], raw_rules)
     
     if not rules:
         log.warning("Bu mod için tanımlanmış herhangi bir kural bulunamadı.")
@@ -66,32 +71,32 @@ def run_rules_engine(
     i: int
     rule: Dict[str, Any]
     for i, rule in enumerate(rules, 1):
-        comment: str = rule.get("comment", f"Kural #{i}")
+        comment: str = str(rule.get("comment", f"Kural #{i}"))
         log.info(f"--- KURAL #{i}: {comment} ---")
 
         filters: Dict[str, Any] = rule.get("filters", {})
         query_parts: List[str] = []
 
-        label_names: List[str] = rule.get("labels_to_remove", filters.get("required_labels", []))
+        label_names: List[str] = cast(List[str], rule.get("labels_to_remove", filters.get("required_labels", [])))
         if label_names:
-            valid: List[str] = [f'"{n}"' for n in label_names if n in labels_map]
+            valid: List[str] = [f'"{n}"' for n in label_names if str(n) in labels_map]
             if valid:
                 query_parts.append(f'({" OR ".join(f"label:{n}" for n in valid)})')
             else:
                 log.warning("Kural atlandı: Belirtilen etiketler Gmail üzerinde bulunamadı.")
                 continue
 
-        senders: Optional[List[str]] = filters.get("from_senders")
+        senders: Optional[List[str]] = cast(Optional[List[str]], filters.get("from_senders"))
         if senders:
-            query_parts.append(f'({" OR ".join(f"from:{s}" for s in senders)})')
+            query_parts.append(f'({" OR ".join(f"from:{str(s)}" for s in senders)})')
             
-        keywords: Optional[List[str]] = filters.get("subject_keywords")
+        keywords: Optional[List[str]] = cast(Optional[List[str]], filters.get("subject_keywords"))
         if keywords:
-            joined: str = " OR ".join(f'"{kw}"' for kw in keywords)
+            joined: str = " OR ".join(f'"{str(kw)}"' for kw in keywords)
             query_parts.append(f"(subject:({joined}))")
             
         days: Any = filters.get("days_older_than")
-        if days and isinstance(days, int) and days > 0:
+        if days and isinstance(days, int) and int(days) > 0:
             query_parts.append(f"older_than:{days}d")
 
         query: str = " ".join(query_parts) if query_parts else "label:all"
@@ -109,7 +114,8 @@ def run_rules_engine(
             log.warning(f"TEST MODU: {len(messages)} e-posta bu kuraldan etkilenecekti.")
             msg: Dict[str, Any]
             for msg in messages[:20]:
-                log.info(f"  - Örnek kimlik: {msg['id']}")
+                msg_id: str = str(msg.get('id', 'Bilinmiyor'))
+                log.info(f"  - Örnek kimlik: {msg_id}")
             if len(messages) > 20:
                 log.info(f"  ... ve {len(messages) - 20} adet daha.")
         else:
@@ -118,8 +124,9 @@ def run_rules_engine(
             count: int = 0
             
             for msg in messages:
+                msg_id_val: str = str(msg.get("id", ""))
                 try:
-                    api_call: Any = action_fn(service, msg["id"], rule, labels_map)
+                    api_call: Any = action_fn(service, msg_id_val, rule, labels_map)
                     if api_call:
                         batch.add(api_call)
                         count += 1
@@ -130,7 +137,7 @@ def run_rules_engine(
                         batch = service.new_batch_http_request(callback=_batch_callback)
                         count = 0
                 except Exception as e:
-                    log.error(f"Toplu işleme ekleme hatası (Kimlik: {msg['id']}): {e}")
+                    log.error(f"Toplu işleme ekleme hatası (Kimlik: {msg_id_val}): {e}")
 
             if count > 0:
                 batch.execute()
@@ -151,7 +158,8 @@ def create_cleanup_request(service: Any, msg_id: str, rule: Dict[str, Any], labe
     Returns:
         Any: Hazırlanmış API değiştirme isteği.
     """
-    ids: List[str] = [labels_map[n] for n in rule.get("labels_to_remove", []) if n in labels_map]
+    labels_to_remove: List[str] = cast(List[str], rule.get("labels_to_remove", []))
+    ids: List[str] = [labels_map[str(n)] for n in labels_to_remove if str(n) in labels_map]
     
     if not ids:
         return None
@@ -173,6 +181,7 @@ def create_trash_request(service: Any, msg_id: str, rule: Dict[str, Any], labels
     Returns:
         Any: Hazırlanmış API çöp kutusu isteği.
     """
+    log.debug(f"Çöpe atma işlemi kuralı: {len(rule)} özellik taşıyor, harita boyutu: {len(labels_map)}")
     return service.users().messages().trash(userId="me", id=msg_id)
 
 
@@ -204,7 +213,7 @@ def delete_label(service: Any, label_name: str, labels_map: Dict[str, str], is_t
         log.info(f"Etiket '{label_name}' başarıyla silindi.")
         return True
     except HttpError as e:
-        if e.resp.status == 404:
+        if cast(Any, e).resp.status == 404:
             log.info(f"✨ Etiket '{label_name}' zaten silinmiş.")
             return True
         log.error(f"Etiket silme hatası '{label_name}': {e}")
@@ -228,8 +237,9 @@ def run_delete_label_task(config: Dict[str, Any]) -> None:
             return
 
         settings: Dict[str, Any] = config.get("label_delete_settings", {})
-        is_test: bool = settings.get("run_in_test_mode", True)
-        labels_to_delete: List[str] = settings.get("labels_to_delete_permanently", [])
+        
+        is_test: bool = bool(settings.get("run_in_test_mode", True))
+        labels_to_delete: List[str] = cast(List[str], settings.get("labels_to_delete_permanently", []))
 
         if not labels_to_delete:
             log.info("Silinecek herhangi bir etiket tanımlanmamış.")
@@ -237,7 +247,8 @@ def run_delete_label_task(config: Dict[str, Any]) -> None:
 
         try:
             results: Dict[str, Any] = service.users().labels().list(userId='me').execute()
-            existing_map: Dict[str, str] = {l['name']: l['id'] for l in results.get('labels', [])}
+            existing_labels_list: List[Dict[str, Any]] = results.get('labels', [])
+            existing_map: Dict[str, str] = {str(l['name']): str(l['id']) for l in existing_labels_list}
         except Exception as e:
             log.error(f"Güncel etiket listesi çekilemedi: {e}")
             return
@@ -248,7 +259,9 @@ def run_delete_label_task(config: Dict[str, Any]) -> None:
 
         name: str
         for name in labels_to_delete:
-            delete_label(service, name, existing_map, is_test)
+            success: bool = delete_label(service, str(name), existing_map, is_test)
+            if not success:
+                log.warning(f"'{name}' etiketinin silinme işlemi tamamlanamadı.")
             
     finally:
         _maintenance_lock.release()
@@ -271,18 +284,21 @@ def run_cleanup_task(config: Dict[str, Any]) -> None:
             return
             
         settings: Dict[str, Any] = config.get("cleanup_mode_settings", {})
-        is_test: bool = settings.get("run_in_test_mode", True)
+        is_test: bool = bool(settings.get("run_in_test_mode", True))
         
         try:
             results: Dict[str, Any] = service.users().labels().list(userId='me').execute()
-            existing_map: Dict[str, str] = {l['name']: l['id'] for l in results.get('labels', [])}
+            existing_labels_list: List[Dict[str, Any]] = results.get('labels', [])
+            existing_map: Dict[str, str] = {str(l['name']): str(l['id']) for l in existing_labels_list}
         except Exception as e:
             log.error(f"Etiket listesi alınamadı: {e}")
             return
 
         log.info("🧹 Temizlik işlemi başlatıldı...")
-        run_rules_engine(service, settings, existing_map, is_test, create_cleanup_request)
-        log.info("✅ Temizlik işlemi başarıyla tamamlandı.")
+        
+        processed_count: int = run_rules_engine(service, settings, existing_map, is_test, create_cleanup_request)
+        
+        log.info(f"✅ Temizlik işlemi başarıyla tamamlandı. Toplam etki alanı: {processed_count} e-posta.")
         
     finally:
         _maintenance_lock.release()
@@ -305,18 +321,21 @@ def run_trash_task(config: Dict[str, Any]) -> None:
             return
             
         settings: Dict[str, Any] = config.get("trash_mode_settings", {})
-        is_test: bool = settings.get("run_in_test_mode", True)
+        is_test: bool = bool(settings.get("run_in_test_mode", True))
         
         try:
             results: Dict[str, Any] = service.users().labels().list(userId='me').execute()
-            existing_map: Dict[str, str] = {l['name']: l['id'] for l in results.get('labels', [])}
+            existing_labels_list: List[Dict[str, Any]] = results.get('labels', [])
+            existing_map: Dict[str, str] = {str(l['name']): str(l['id']) for l in existing_labels_list}
         except Exception as e:
             log.error(f"Etiket haritası yüklenemedi: {e}")
             return
 
         log.info("🗑️ Çöpe atma işlemi başlatıldı...")
-        run_rules_engine(service, settings, existing_map, is_test, create_trash_request)
-        log.info("✅ Çöpe atma işlemi tamamlandı.")
+        
+        processed_count: int = run_rules_engine(service, settings, existing_map, is_test, create_trash_request)
+        
+        log.info(f"✅ Çöpe atma işlemi tamamlandı. Aktarılan: {processed_count} e-posta.")
         
     finally:
         _maintenance_lock.release()

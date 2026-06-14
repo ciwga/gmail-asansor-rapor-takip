@@ -3,13 +3,14 @@ Gmail API İstemcisi - Yaygın işlemleri hata yönetimi ile birlikte sarmalar.
 """
 
 import time
-from typing import List, Dict, Set, Any, Optional, Callable
+import logging
+from typing import List, Dict, Set, Any, Optional, Callable, cast
 
-from googleapiclient.errors import HttpError
+from googleapiclient.errors import HttpError  # type: ignore
 
 from app.utils.logging import get_logger
 
-log: Any = get_logger(__name__)
+log: logging.Logger = get_logger(__name__)
 
 BATCH_SIZE_GET: int = 20
 BATCH_SIZE_MODIFY: int = 40
@@ -37,7 +38,9 @@ def get_all_messages(service: Any, query: str) -> List[Dict[str, Any]]:
             ).execute()
             
             messages.extend(resp.get("messages", []))
-            page_token = resp.get("nextPageToken")
+            
+            next_token_raw: Any = resp.get("nextPageToken")
+            page_token = str(next_token_raw) if next_token_raw else None
             
             if not page_token:
                 break
@@ -60,7 +63,8 @@ def ensure_labels(service: Any, label_names: Set[str]) -> Dict[str, str]:
     """
     try:
         results: Dict[str, Any] = service.users().labels().list(userId="me").execute()
-        existing: Dict[str, str] = {l["name"]: l["id"] for l in results.get("labels", [])}
+        existing_list: List[Dict[str, Any]] = results.get("labels", [])
+        existing: Dict[str, str] = {str(l["name"]): str(l["id"]) for l in existing_list}
     except Exception as e:
         log.error(f"Etiket listesi alınamadı: {e}")
         return {}
@@ -69,35 +73,37 @@ def ensure_labels(service: Any, label_names: Set[str]) -> Dict[str, str]:
     created: int = 0
     
     for name in label_names:
-        if not name:
+        safe_name: str = str(name)
+        if not safe_name:
             continue
             
-        if name in existing:
-            label_map[name] = existing[name]
+        if safe_name in existing:
+            label_map[safe_name] = existing[safe_name]
         else:
             try:
                 result: Dict[str, str] = service.users().labels().create(
                     userId="me",
                     body={
-                        "name": name,
+                        "name": safe_name,
                         "labelListVisibility": "labelShow",
                         "messageListVisibility": "show",
                     },
                 ).execute()
-                label_map[name] = result["id"]
+                label_map[safe_name] = result["id"]
                 created += 1
             except Exception as e:
                 if "already exists" in str(e).lower():
                     try:
                         results2: Dict[str, Any] = service.users().labels().list(userId="me").execute()
-                        for l in results2.get("labels", []):
-                            if l["name"] == name:
-                                label_map[name] = l["id"]
+                        fallback_list: List[Dict[str, Any]] = results2.get("labels", [])
+                        for l in fallback_list:
+                            if str(l.get("name", "")) == safe_name:
+                                label_map[safe_name] = str(l["id"])
                                 break
                     except Exception:
                         pass
                 else:
-                    log.error(f"Etiket oluşturulamadı '{name}': {e}")
+                    log.error(f"Etiket oluşturulamadı '{safe_name}': {e}")
 
     if created:
         log.info(f"🏷️ {created} yeni etiket oluşturuldu")
@@ -106,14 +112,15 @@ def ensure_labels(service: Any, label_names: Set[str]) -> Dict[str, str]:
 
 
 def batch_fetch_messages(
-    service: Any, message_ids: List[str], callback: Callable
+    service: Any, message_ids: List[str], callback: Callable[[str, Any, Any], None]
 ) -> None:
     """Mesaj içeriklerini toplu paketler halinde çeker.
 
     Args:
         service (Any): Gmail API servis nesnesi.
         message_ids (List[str]): Çekilecek mesajların kimlik listesi.
-        callback (Callable): Her mesaj çekildiğinde çalıştırılacak fonksiyon.
+        callback (Callable[[str, Any, Any], None]): 
+            Her mesaj çekildiğinde çalıştırılacak katı tanımlı (strict-typed) fonksiyon.
     """
     i: int
     for i in range(0, len(message_ids), BATCH_SIZE_GET):
@@ -139,7 +146,7 @@ def batch_modify(service: Any, modifications: List[Dict[str, Any]]) -> None:
 
     Args:
         service (Any): Gmail API servis nesnesi.
-        modifications (List[dict]): Mesaj kimliğini ve değiştirme gövdesini içeren liste.
+        modifications (List[Dict[str, Any]]): Mesaj kimliğini ve değiştirme gövdesini içeren liste.
     """
     if not modifications:
         return
@@ -148,8 +155,10 @@ def batch_modify(service: Any, modifications: List[Dict[str, Any]]) -> None:
 
     def _cb(request_id: str, response: Any, exception: Any) -> None:
         """Her bir değiştirme isteği için geri çağırma fonksiyonu."""
+        log.debug(f"Toplu etiket modifikasyonu (İstek: {request_id}) yanıtı: {response}")
+        
         if exception:
-            if isinstance(exception, HttpError) and exception.resp.status == 429:
+            if isinstance(exception, HttpError) and cast(Any, exception).resp.status == 429:
                 failed.append(modifications[int(request_id)])
             else:
                 log.error(f"Etiket uygulama hatası (İstek kimliği {request_id}): {exception}")
@@ -163,9 +172,10 @@ def batch_modify(service: Any, modifications: List[Dict[str, Any]]) -> None:
         j: int
         mod: Dict[str, Any]
         for j, mod in enumerate(chunk):
+            msg_id_val: str = str(mod.get("id", ""))
             batch.add(
                 service.users().messages().modify(
-                    userId="me", id=mod["id"], body=mod["body"]
+                    userId="me", id=msg_id_val, body=mod.get("body", {})
                 ),
                 request_id=str(i + j),
             )
@@ -191,18 +201,19 @@ def batch_modify(service: Any, modifications: List[Dict[str, Any]]) -> None:
         time.sleep(wait)
 
         for mod in retry_list:
+            msg_id_retry: str = str(mod.get("id", ""))
             try:
                 service.users().messages().modify(
-                    userId="me", id=mod["id"], body=mod["body"]
+                    userId="me", id=msg_id_retry, body=mod.get("body", {})
                 ).execute()
                 time.sleep(0.3)
             except HttpError as e:
-                if e.resp.status == 429:
+                if cast(Any, e).resp.status == 429:
                     failed.append(mod)
                 else:
-                    log.error(f"Etiket hatası (Kimlik {mod['id']}): {e}")
+                    log.error(f"Etiket hatası (Kimlik {msg_id_retry}): {e}")
             except Exception as e:
-                log.error(f"Etiket hatası (Kimlik {mod['id']}): {e}")
+                log.error(f"Etiket hatası (Kimlik {msg_id_retry}): {e}")
 
     if failed:
         log.warning(f"⚠️ {len(failed)} e-postaya hız limiti nedeniyle etiket uygulanamadı.")
