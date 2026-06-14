@@ -4,6 +4,7 @@ PDF eki içermeyen randevu bildirim e-postalarından bina adı ve kontrol tarihi
 """
 
 import re
+import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Set
 
@@ -15,9 +16,9 @@ from app.utils.patterns import (
     MMO_BINA_ADI_PATTERN, MMO_KONTROL_TARIHI_PATTERN, MMO_BINA_ID_PATTERN,
 )
 
-log: Any = get_logger(__name__)
+log: logging.Logger = get_logger(__name__)
 
-_ILCE_PAT: str = ILCE_PATTERN.pattern
+_ILCE_PAT: str = str(ILCE_PATTERN.pattern)
 
 
 def parse_appointment(content: str, subject: str, sender: str, date_ms: int) -> Optional[List[Dict[str, Any]]]:
@@ -33,7 +34,7 @@ def parse_appointment(content: str, subject: str, sender: str, date_ms: int) -> 
         Optional[List[Dict[str, Any]]]: Bulunan randevu verilerinin listesi veya hiçbir şey bulunamazsa None.
     """
     try:
-        sender_lower: str = sender.lower()
+        sender_lower: str = str(sender).lower()
         results: List[Dict[str, Any]] = []
 
         if "mmo.org.tr" in sender_lower:
@@ -45,7 +46,7 @@ def parse_appointment(content: str, subject: str, sender: str, date_ms: int) -> 
         elif "optimaldenge" in sender_lower or "milenyum" in sender_lower:
             results = _parse_optimal_denge(content, subject)
 
-        return results if results else None
+        return results if len(results) > 0 else None
     except Exception as e:
         log.error(f"Randevu ayrıştırma genel hatası: {e}", exc_info=True)
         return None
@@ -67,8 +68,8 @@ def _parse_mmo(content: str) -> List[Dict[str, Any]]:
     bid_m: Optional[re.Match[str]] = MMO_BINA_ID_PATTERN.search(content)
 
     if bina_m and tarih_m:
-        building: str = re.sub(r"<[^>]+>", "", bina_m.group(1)).strip()
-        raw: str = tarih_m.group(1).strip()
+        building: str = str(re.sub(r"<[^>]+>", "", str(bina_m.group(1)))).strip()
+        raw: str = str(tarih_m.group(1)).strip()
         tarih: str
         
         try:
@@ -76,14 +77,17 @@ def _parse_mmo(content: str) -> List[Dict[str, Any]]:
         except ValueError:
             tarih = raw
             
-        bid: str = bid_m.group(1) if bid_m else "N/A"
+        bid: str = str(bid_m.group(1)) if bid_m else "N/A"
         
-        safe_b: str = re.sub(r'[^A-Za-z0-9]', '', building)[:20]
-        uid: str = f"RANDEVU-MMO-{bid}-{safe_b}-{tarih.replace('.', '')}"
+        safe_b: str = str(re.sub(r'[^A-Za-z0-9]', '', building))[:20]
+        
+        idx: int = 1
+        uid: str = f"RANDEVU-MMO-{bid}-{safe_b}-{tarih.replace('.', '')}-{idx}"
+        file_name: str = f"RANDEVU_MMO_{bid}_{safe_b}_{idx}"
         
         results.append(_make_randevu(
-            f"RANDEVU_MMO_{bid}_{safe_b}", "MMO (Randevu)", building,
-            tarih, uid,
+            file_name, "MMO (Randevu)", building,
+            tarih, uid, elevator_number=f"Asansör #{idx}"
         ))
         
     return results
@@ -104,52 +108,59 @@ def _parse_asansor_kontrol(content: str) -> List[Dict[str, Any]]:
     if not tarih_m:
         return results
         
-    tarih: str = f"{tarih_m.group(1)}.{tarih_m.group(2)}.{tarih_m.group(3)}"
+    tarih: str = f"{str(tarih_m.group(1))}.{str(tarih_m.group(2))}.{str(tarih_m.group(3))}"
     lines: List[str] = content.splitlines()
     seen: Set[str] = set()
 
+    idx: int = 1
+
     for line in lines:
-        normalized: str = re.sub(r"[\t ]+", " ", line).strip()
+        normalized: str = str(re.sub(r"[\t ]+", " ", line)).strip()
         if not normalized:
             continue
 
         if not ILCE_KNT_PATTERN.search(normalized):
             continue
 
-        before_ilce: str = re.split(_ILCE_PAT, normalized, flags=re.IGNORECASE)[0]
+        before_ilce: str = str(re.split(_ILCE_PAT, normalized, flags=re.IGNORECASE)[0])
         kid_m: Optional[re.Match[str]] = KID_PATTERN_NUMERIC.search(before_ilce)
-        kid: str = kid_m.group(1).replace("/", "-") if kid_m else "N/A"
+        kid: str = str(kid_m.group(1)).replace("/", "-") if kid_m else "N/A"
 
         clean: str = before_ilce
-        clean = PERSON_ASN_PATTERN.sub("", clean)
-        clean = re.sub(r"\(?\d+/\d+\)?\s*", "", clean)
-        clean = re.sub(r"\b0?\s*\d{3}\s*\d{3}\s*\d{2}\s*\d{2}\b", "", clean)
-        clean = PHONE_PATTERN_10_11.sub("", clean)
+        clean = str(PERSON_ASN_PATTERN.sub("", clean))
+        clean = str(re.sub(r"\(?\d+/\d+\)?\s*", "", clean))
+        clean = str(re.sub(r"\b0?\s*\d{3}\s*\d{3}\s*\d{2}\s*\d{2}\b", "", clean))
+        clean = str(PHONE_PATTERN_10_11.sub("", clean))
         
-        clean = re.sub(r"^\s*\d+[\)\.-]\s*", "", clean)
-        clean = re.sub(r"^\s*\d+\s+", "", clean)
-        clean = re.sub(r"^\s*[\)\.-]+\s*", "", clean)
-        clean = re.sub(r"\s+\d+\s*$", "", clean)
+        clean = str(re.sub(r"^\s*\d+[\)\.-]\s*", "", clean))
+        clean = str(re.sub(r"^\s*\d+\s+", "", clean))
+        clean = str(re.sub(r"^\s*[\)\.-]+\s*", "", clean))
+        clean = str(re.sub(r"\s+\d+\s*$", "", clean))
         
         if "/" in clean:
             parts: List[str] = clean.split("/")
-            if parts[0].strip() and not parts[-1].strip().isdigit():
-                clean = parts[0]
+            if str(parts[0]).strip() and not str(parts[-1]).strip().isdigit():
+                clean = str(parts[0])
                 
-        clean = re.sub(r"\s+", " ", clean).strip()
+        clean = str(re.sub(r"\s+", " ", clean)).strip()
 
         if len(clean) < 3 or clean in seen:
             continue
 
         seen.add(clean)
         
-        safe_b: str = re.sub(r'[^A-Za-z0-9]', '', clean)[:20]
-        uid: str = f"RANDEVU-ASK-{kid}-{safe_b}-{tarih.replace('.', '')}"
+        safe_b: str = str(re.sub(r'[^A-Za-z0-9]', '', clean))[:20]
+        
+        uid: str = f"RANDEVU-ASK-{kid}-{safe_b}-{tarih.replace('.', '')}-{idx}"
+        file_name: str = f"RANDEVU_ASK_{kid}_{safe_b}_{tarih.replace('.', '')}_{idx}"
         
         results.append(_make_randevu(
-            f"RANDEVU_ASK_{kid}_{safe_b}_{tarih.replace('.', '')}",
+            file_name,
             "Asansör Kontrol (Randevu)", clean, tarih, uid,
+            elevator_number=f"Asansör #{idx}"
         ))
+        
+        idx += 1
 
     return results
 
@@ -167,28 +178,35 @@ def _parse_artibel(content: str) -> List[Dict[str, Any]]:
     lines: List[str] = content.splitlines()
     i: int = 0
     
+    idx: int = 1
+    
     while i < len(lines):
         date_m: Optional[re.Match[str]] = re.match(r"\s*(\d{2}\.\d{2}\.\d{4})\s*$", lines[i].strip())
         
         if date_m:
-            tarih: str = date_m.group(1)
+            tarih: str = str(date_m.group(1))
             
             for j in range(i + 1, min(i + 15, len(lines))):
                 bina_m: Optional[re.Match[str]] = ARTIBEL_BUILDING_PATTERN.search(lines[j])
                 
                 if bina_m:
-                    raw: str = bina_m.group(1).strip()
+                    raw: str = str(bina_m.group(1)).strip()
                     kid_m: Optional[re.Match[str]] = re.search(r"\(([\d/]+)\)", raw)
-                    kid: str = kid_m.group(1).replace("/", "-") if kid_m else "N/A"
-                    building: str = re.sub(r"\([^)]+\)", "", raw).strip()
+                    kid: str = str(kid_m.group(1)).replace("/", "-") if kid_m else "N/A"
+                    building: str = str(re.sub(r"\([^)]+\)", "", raw)).strip()
                     
-                    safe_b: str = re.sub(r'[^A-Za-z0-9]', '', building)[:20]
-                    uid: str = f"RANDEVU-ART-{kid}-{safe_b}-{tarih.replace('.', '')}"
+                    safe_b: str = str(re.sub(r'[^A-Za-z0-9]', '', building))[:20]
+                    
+                    uid: str = f"RANDEVU-ART-{kid}-{safe_b}-{tarih.replace('.', '')}-{idx}"
+                    file_name: str = f"RANDEVU_ART_{kid}_{safe_b}_{tarih.replace('.', '')}_{idx}"
                     
                     results.append(_make_randevu(
-                        f"RANDEVU_ART_{kid}_{safe_b}_{tarih.replace('.', '')}",
+                        file_name,
                         "Artıbel (Randevu)", building, tarih, uid,
+                        elevator_number=f"Asansör #{idx}"
                     ))
+                    
+                    idx += 1
                     break
         i += 1
         
@@ -215,45 +233,61 @@ def _parse_optimal_denge(content: str, subject: str) -> List[Dict[str, Any]]:
     tarih: Optional[str] = None
 
     if bina_m:
-        building = bina_m.group(1).strip().rstrip(".")
+        building = str(bina_m.group(1)).strip().rstrip(".")
     elif sub_m:
-        building = sub_m.group(2).strip().rstrip(".")
+        building = str(sub_m.group(2)).strip().rstrip(".")
 
     if tarih_m:
-        raw: str = tarih_m.group(1)
+        raw: str = str(tarih_m.group(1))
         parts: List[str] = raw.split(".")
         if len(parts) == 3:
-            tarih = f"{parts[0].zfill(2)}.{parts[1].zfill(2)}.{parts[2]}"
+            tarih = f"{str(parts[0]).zfill(2)}.{str(parts[1]).zfill(2)}.{str(parts[2])}"
     elif sub_m:
-        raw = sub_m.group(1)
+        raw = str(sub_m.group(1))
         parts = raw.split(".")
         if len(parts) == 3:
-            tarih = f"{parts[0].zfill(2)}.{parts[1].zfill(2)}.{parts[2]}"
+            tarih = f"{str(parts[0]).zfill(2)}.{str(parts[1]).zfill(2)}.{str(parts[2])}"
 
     if building and tarih:
-        safe_b: str = re.sub(r'[^A-Za-z0-9]', '', building)[:20]
-        uid: str = f"RANDEVU-OPT-{safe_b}-{tarih.replace('.', '')}"
+        safe_b: str = str(re.sub(r'[^A-Za-z0-9]', '', building))[:20]
+        
+        # Mükerrer (Overwrite) hatasını önlemek için indekse dayalı isimlendirme:
+        idx: int = 1
+        uid: str = f"RANDEVU-OPT-{safe_b}-{tarih.replace('.', '')}-{idx}"
+        file_name: str = f"RANDEVU_OPT_{safe_b}_{tarih.replace('.', '')}_{idx}"
         
         results.append(_make_randevu(
-            f"RANDEVU_OPT_{safe_b}_{tarih.replace('.', '')}",
+            file_name,
             "Optimal Denge (Randevu)", building, tarih, uid,
+            elevator_number=f"Asansör #{idx}"
         ))
 
     return results
 
 
-def _make_randevu(file_name: str, provider: str, building: str, tarih: str, uuid: str) -> Dict[str, Any]:
+def _make_randevu(
+    file_name: str, 
+    provider: str, 
+    building: str, 
+    tarih: str, 
+    uuid_str: str, 
+    elevator_number: str = "N/A"
+) -> Dict[str, Any]:
     """Randevu verilerini içeren standart sonuç sözlüğünü oluşturur.
+    
+    Bu fonksiyon, gelen yapısal verileri merkezi bir Rapor sözlük modeline uyarlar.
 
     Args:
-        file_name (str): Sanal dosya adı.
-        provider (str): Raporu sağlayan kuruluş.
-        building (str): Bina adı.
-        tarih (str): Muayene tarihi.
-        uuid (str): Kayıt için benzersiz kimlik.
+        file_name (str): Benzersizleştirilmiş sanal dosya adı.
+        provider (str): Raporu sağlayan kuruluş bilgisi.
+        building (str): Ayrıştırılan bina adı.
+        tarih (str): Muayene / randevu tarihi.
+        uuid_str (str): Veritabanı çakışmalarını (primary key collisions) önlemek için eşsiz kimlik.
+        elevator_number (str): Engine.py tarafında mükerrer kayıtların ezilmesini önlemek 
+            için tahsis edilmiş numaralandırma. Varsayılan "N/A".
 
     Returns:
-        Dict[str, Any]: Rapor veri modeline uygun sözlük yapısı.
+        Dict[str, Any]: Ana rapor işleme motoruna gönderilecek veri sözlüğü.
     """
     return {
         "file_name": file_name,
@@ -262,6 +296,6 @@ def _make_randevu(file_name: str, provider: str, building: str, tarih: str, uuid
         "label_color": "Randevu",
         "inspection_date": tarih,
         "next_inspection": tarih,
-        "elevator_number": "N/A",
-        "uuid": uuid,
+        "elevator_number": elevator_number,
+        "uuid": uuid_str,
     }
