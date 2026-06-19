@@ -4,13 +4,14 @@ import json
 import logging
 import os
 import threading
-import time
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Tuple, Dict, List, Set, Optional
+from typing import Any, Tuple, Dict, List, Optional, Union, cast
 
 from flask import Flask, render_template, request, jsonify, send_file, Response
 from flask_socketio import SocketIO
+from werkzeug.datastructures import FileStorage
+from sqlalchemy.orm import Session
 
 from app.config import load_config, save_config
 from app.utils.logging import setup_logging, set_socketio, get_recent_logs, get_logger
@@ -41,12 +42,65 @@ def _get_unique_key(r: Dict[str, Any]) -> str:
     Returns:
         str: Rapor için güvenli ve benzersiz kimlik dizgesi.
     """
-    uid: str = str(r.get("uuid", ""))
+    uid_raw: Any = r.get("uuid", "")
+    uid: str = str(uid_raw)
     
     if uid and uid != "N/A" and uid != "None":
         return uid
         
-    return str(r.get("file_name", ""))
+    file_name_raw: Any = r.get("file_name", "")
+    return str(file_name_raw)
+
+
+def _backup_to_archive(results_to_archive: List[Dict[str, Any]]) -> None:
+    """Belirtilen sonuç listesini veritabanı silinmeden önce arşive alır.
+    
+    Args:
+        results_to_archive (List[Dict[str, Any]]): Arşivlenecek rapor/randevu öğeleri.
+    """
+    if not results_to_archive:
+        return
+        
+    arch_data: Optional[Dict[str, Any]] = get_task_result("web_archived_results")
+    arch_safe: Dict[str, Any] = arch_data if arch_data else {}
+    arch_raw: Any = arch_safe.get("data", [])
+    arch_list: List[Dict[str, Any]] = []
+    
+    if isinstance(arch_raw, list):
+        raw_list: List[Any] = cast(List[Any], arch_raw)
+        for item in raw_list:
+            if isinstance(item, dict):
+                arch_list.append(cast(Dict[str, Any], item))
+                
+    arch_map: Dict[str, Dict[str, Any]] = {_get_unique_key(r): r for r in arch_list}
+    for r in results_to_archive:
+        arch_map[_get_unique_key(r)] = r
+        
+    set_task_result("web_archived_results", {"data": list(arch_map.values())})
+
+
+def _remove_from_archive(ids_to_remove: List[str]) -> None:
+    """Belirtilen kimliklere sahip sonuçları arşivden kalıcı olarak temizler.
+    
+    Args:
+        ids_to_remove (List[str]): Arşivden çıkarılacak eşsiz kimlikler.
+    """
+    if not ids_to_remove:
+        return
+        
+    arch_data: Optional[Dict[str, Any]] = get_task_result("web_archived_results")
+    arch_safe: Dict[str, Any] = arch_data if arch_data else {}
+    arch_raw: Any = arch_safe.get("data", [])
+    arch_list: List[Dict[str, Any]] = []
+    
+    if isinstance(arch_raw, list):
+        raw_list: List[Any] = cast(List[Any], arch_raw)
+        for item in raw_list:
+            if isinstance(item, dict):
+                arch_list.append(cast(Dict[str, Any], item))
+                
+    valid_arch: List[Dict[str, Any]] = [r for r in arch_list if _get_unique_key(r) not in ids_to_remove]
+    set_task_result("web_archived_results", {"data": valid_arch})
 
 
 def create_app() -> Tuple[Flask, SocketIO]:
@@ -59,7 +113,9 @@ def create_app() -> Tuple[Flask, SocketIO]:
     static_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
     
     app: Flask = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
-    app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET", os.urandom(24))
+    
+    secret_env: Optional[str] = os.environ.get("FLASK_SECRET")
+    app.config["SECRET_KEY"] = secret_env if secret_env is not None else os.urandom(24)
     
     socketio: SocketIO = SocketIO(
         app, 
@@ -74,7 +130,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
     set_socketio(socketio)
 
     @app.route("/")
-    def index() -> str:
+    def index() -> str:  # pyright: ignore[reportUnusedFunction]
         """Ana web arayüzünü sunar."""
         with _lock:
             return render_template(
@@ -87,7 +143,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             )
 
     @app.route("/api/status", methods=["GET"])
-    def status() -> Response:
+    def status() -> Response:  # pyright: ignore[reportUnusedFunction]
         """İşlem motorunun mevcut durumunu döndürür."""
         with _lock:
             return jsonify({
@@ -103,7 +159,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             })
 
     @app.route("/api/run", methods=["POST"])
-    def start_run() -> Response:
+    def start_run() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """İşlem motorunu asenkron olarak tetikler."""
         global _running, _run_id, _progress, _last_error, _run_start_time
         
@@ -124,11 +180,20 @@ def create_app() -> Tuple[Flask, SocketIO]:
                 
                 if results:
                     with _lock:
-                        stored_data: Dict[str, Any] = get_task_result("web_last_results") or {}
-                        existing_results: List[Dict[str, Any]] = stored_data.get("data", [])
+                        stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+                        stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+                        
+                        existing_results_raw: Any = stored_data_safe.get("data", [])
+                        existing_results: List[Dict[str, Any]] = []
+                        
+                        if isinstance(existing_results_raw, list):
+                            raw_list: List[Any] = cast(List[Any], existing_results_raw)
+                            for item in raw_list:
+                                if isinstance(item, dict):
+                                    item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                                    existing_results.append(item_map)
                         
                         existing_map: Dict[str, Dict[str, Any]] = {_get_unique_key(r): r for r in existing_results}
-                        res: Dict[str, Any]
                         for res in results:
                             existing_map[_get_unique_key(res)] = res
                             
@@ -150,13 +215,19 @@ def create_app() -> Tuple[Flask, SocketIO]:
         return jsonify({"status": "started", "run_id": _run_id})
 
     @app.route("/api/watch/start", methods=["POST"])
-    def watch_start() -> Response:
+    def watch_start() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Periyodik kontrol modunu başlatır."""
         global _watch_running
         
         try:
             config: Dict[str, Any] = load_config()
-            is_search_by_label: bool = config.get("search_settings", {}).get("search_by_label", False)
+            search_settings_raw: Any = config.get("search_settings", {})
+            is_search_by_label: bool = False
+            
+            if isinstance(search_settings_raw, dict):
+                s_map: Dict[str, Any] = cast(Dict[str, Any], search_settings_raw)
+                is_search_by_label = bool(s_map.get("search_by_label", False))
+                
             if is_search_by_label:
                 return jsonify({
                     "status": "error", 
@@ -175,12 +246,20 @@ def create_app() -> Tuple[Flask, SocketIO]:
             """Dinleme modunun kendi iş parçacığında çalışan ana döngüsü."""
             global _watch_running
             try:
-                from app.core.engine import run, _watch_stop
-                _watch_stop.clear()
+                from app.core.engine import run, _watch_stop  # pyright: ignore[reportPrivateUsage]
+                _watch_stop.clear()  # pyright: ignore[reportPrivateUsage]
                 
-                config: Dict[str, Any] = load_config()
-                ws: Dict[str, Any] = config.get("watch_settings", {})
-                interval: int = max(1, ws.get("interval_minutes", 30))
+                bg_config: Dict[str, Any] = load_config()
+                ws_raw: Any = bg_config.get("watch_settings", {})
+                interval: int = 30
+                
+                if isinstance(ws_raw, dict):
+                    ws_map: Dict[str, Any] = cast(Dict[str, Any], ws_raw)
+                    interval_raw: Any = ws_map.get("interval_minutes", 30)
+                    if isinstance(interval_raw, int):
+                        interval = interval_raw
+                        
+                interval = max(1, interval)
                 
                 log.info("=" * 50)
                 log.info(f"👁️  DİNLEME MODU — Her {interval} dakikada bir kontrol yapılacak")
@@ -188,7 +267,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
                 
                 cycle: int = 0
                 
-                while not _watch_stop.is_set():
+                while not _watch_stop.is_set():  # pyright: ignore[reportPrivateUsage]
                     cycle += 1
                     log.info(f"🔄 Döngü #{cycle} başlıyor...")
                     try:
@@ -196,18 +275,27 @@ def create_app() -> Tuple[Flask, SocketIO]:
                         
                         if results:
                             with _lock:
-                                stored_data: Dict[str, Any] = get_task_result("web_last_results") or {}
-                                existing_results: List[Dict[str, Any]] = stored_data.get("data", [])
+                                stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+                                stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+                                
+                                existing_results_raw: Any = stored_data_safe.get("data", [])
+                                existing_results: List[Dict[str, Any]] = []
+                                
+                                if isinstance(existing_results_raw, list):
+                                    raw_list: List[Any] = cast(List[Any], existing_results_raw)
+                                    for item in raw_list:
+                                        if isinstance(item, dict):
+                                            item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                                            existing_results.append(item_map)
                                 
                                 existing_map: Dict[str, Dict[str, Any]] = {_get_unique_key(r): r for r in existing_results}
-                                r: Dict[str, Any]
                                 for r in results:
                                     existing_map[_get_unique_key(r)] = r
                                 
                                 updated_list: List[Dict[str, Any]] = list(existing_map.values())
                                 set_task_result("web_last_results", {"data": updated_list})
                             
-                            socketio.emit("results_updated", namespace="/logs")
+                            socketio.emit("results_updated", namespace="/logs")  # pyright: ignore[reportUnknownMemberType]
                             log.info(f"🔄 Döngü #{cycle} tamamlandı: {len(results)} yeni rapor eklendi.")
                         else:
                             log.info(f"🔄 Döngü #{cycle} tamamlandı: Yeni rapor bulunamadı.")
@@ -216,7 +304,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
                         log.error(f"🔄 Döngü #{cycle} hatası: {e}", exc_info=True)
 
                     log.info(f"⏳ {interval} dakika bekleniyor...")
-                    if _watch_stop.wait(timeout=interval * 60):
+                    if _watch_stop.wait(timeout=interval * 60):  # pyright: ignore[reportPrivateUsage]
                         break
 
             except Exception as e:
@@ -231,7 +319,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
         return jsonify({"status": "started"})
 
     @app.route("/api/watch/stop", methods=["POST"])
-    def watch_stop() -> Response:
+    def watch_stop() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Periyodik kontrol modunu durdurur."""
         global _watch_running
         from app.core.engine import stop_watch
@@ -243,28 +331,51 @@ def create_app() -> Tuple[Flask, SocketIO]:
         return jsonify({"status": "stopped"})
 
     @app.route("/api/results", methods=["GET"])
-    def get_results() -> Response:
+    def get_results() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """İşlenmiş rapor sonuçlarını döndürür."""
         try:
-            stored_data: Dict[str, Any] = get_task_result("web_last_results") or {}
-            all_results: List[Dict[str, Any]] = stored_data.get("data", [])
+            stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+            stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+            
+            all_results_raw: Any = stored_data_safe.get("data", [])
+            all_results: List[Dict[str, Any]] = []
+            
+            if isinstance(all_results_raw, list):
+                raw_list: List[Any] = cast(List[Any], all_results_raw)
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                        all_results.append(item_map)
+                        
             return jsonify(all_results)
         except Exception as error:
             log.error("Sonuçlar getirilirken hata: %s", str(error))
             return jsonify({"error": "Veritabanı hatası"}), 500
 
     @app.route("/api/report/delete/<item_id>", methods=["DELETE"])
-    def delete_report_single(item_id: str) -> Response:
-        """Tekli bir raporu ID'sine göre veritabanından tamamen siler."""
+    def delete_report_single(item_id: str) -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Tekli bir raporu ID'sine göre hem listeden hem de veritabanından tamamen siler."""
         try:
-            stored_data: Dict[str, Any] = get_task_result("web_last_results") or {}
-            all_results: List[Dict[str, Any]] = stored_data.get("data", [])
+            stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+            stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+            
+            all_results_raw: Any = stored_data_safe.get("data", [])
+            all_results: List[Dict[str, Any]] = []
+            
+            if isinstance(all_results_raw, list):
+                raw_list: List[Any] = cast(List[Any], all_results_raw)
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                        all_results.append(item_map)
             
             if all_results:
                 valid_results: List[Dict[str, Any]] = [r for r in all_results if _get_unique_key(r) != item_id]
                 set_task_result("web_last_results", {"data": valid_results})
+            
+            _remove_from_archive([item_id])
                 
-            session: Any = db.Session()
+            session: Session = db.Session()
             try:
                 from app.core.models import PdfFile, ProcessedReport
                 session.query(PdfFile).filter_by(report_id=item_id).delete()
@@ -275,7 +386,6 @@ def create_app() -> Tuple[Flask, SocketIO]:
                 session.rollback()
                 log.error(f"Veritabanı silme hatası: {inner_error}")
             finally:
-                # Güvenli havuz boşaltımı (session.close yerine db.Session.remove kullanıldı)
                 db.Session.remove()
                 
             return jsonify({"status": "deleted", "id": item_id})
@@ -283,48 +393,231 @@ def create_app() -> Tuple[Flask, SocketIO]:
             log.error("Tekli rapor silinirken hata oluştu: %s", str(error))
             return jsonify({"error": "Silme başarısız"}), 500
 
-    @app.route("/api/results/clear-all", methods=["POST", "DELETE"])
-    def clear_all_results() -> Response:
-        """Ekranda listelenen tüm sonuçları veritabanından tamamen siler."""
+    @app.route("/api/results/delete-selected", methods=["POST"])
+    def delete_selected_results() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Kullanıcının işaretlediği kayıtları sadece arayüz listesinden kaldırır (Veritabanında korur, arşive atar)."""
         try:
-            stored_data: Dict[str, Any] = get_task_result("web_last_results") or {}
-            all_results: List[Dict[str, Any]] = stored_data.get("data", [])
+            req_data: Any = request.get_json()
+            if not isinstance(req_data, dict):
+                return jsonify({"error": "Geçersiz istek formatı"}), 400
             
-            session: Any = db.Session()
+            req_map: Dict[str, Any] = cast(Dict[str, Any], req_data)
+            ids_raw: Any = req_map.get("ids", [])
+            
+            if not isinstance(ids_raw, list):
+                return jsonify({"error": "ID listesi bulunamadı"}), 400
+                
+            ids_to_delete: List[str] = [str(i) for i in ids_raw]
+            
+            stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+            stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+            
+            all_results_raw: Any = stored_data_safe.get("data", [])
+            all_results: List[Dict[str, Any]] = []
+            
+            if isinstance(all_results_raw, list):
+                raw_list: List[Any] = cast(List[Any], all_results_raw)
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                        all_results.append(item_map)
+            
+            if all_results:
+                valid_results: List[Dict[str, Any]] = []
+                archived_results: List[Dict[str, Any]] = []
+                
+                for r in all_results:
+                    if _get_unique_key(r) not in ids_to_delete:
+                        valid_results.append(r)
+                    else:
+                        archived_results.append(r)
+                        
+                _backup_to_archive(archived_results)
+                set_task_result("web_last_results", {"data": valid_results})
+                
+            log.info(f"➖ {len(ids_to_delete)} adet sonuç sadece ekran listesinden kaldırıldı ve arşive taşındı.")
+            return jsonify({"status": "deleted"})
+        except Exception as error:
+            log.error("Seçili sonuçlar temizlenirken hata: %s", str(error))
+            return jsonify({"error": "Temizleme başarısız"}), 500
+
+    @app.route("/api/database/delete-selected", methods=["POST"])
+    def delete_selected_database() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Kullanıcının işaretlediği kayıtları arayüzden, arşivden ve VERİTABANINDAN KALICI olarak siler."""
+        try:
+            req_data: Any = request.get_json()
+            if not isinstance(req_data, dict):
+                return jsonify({"error": "Geçersiz istek formatı"}), 400
+                
+            req_map: Dict[str, Any] = cast(Dict[str, Any], req_data)
+            ids_raw: Any = req_map.get("ids", [])
+            
+            if not isinstance(ids_raw, list):
+                return jsonify({"error": "ID listesi bulunamadı"}), 400
+                
+            ids_to_delete: List[str] = [str(i) for i in ids_raw]
+            
+            stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+            stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+            
+            all_results_raw: Any = stored_data_safe.get("data", [])
+            all_results: List[Dict[str, Any]] = []
+            
+            if isinstance(all_results_raw, list):
+                raw_list: List[Any] = cast(List[Any], all_results_raw)
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                        all_results.append(item_map)
+                        
+            if all_results:
+                valid_results: List[Dict[str, Any]] = [r for r in all_results if _get_unique_key(r) not in ids_to_delete]
+                set_task_result("web_last_results", {"data": valid_results})
+            
+            _remove_from_archive(ids_to_delete)
+                
+            session: Session = db.Session()
+            deleted_count: int = 0
             try:
                 from app.core.models import PdfFile, ProcessedReport
-                r: Dict[str, Any]
-                for r in all_results:
-                    item_id: str = _get_unique_key(r)
+                for item_id in ids_to_delete:
                     if item_id:
                         session.query(PdfFile).filter_by(report_id=item_id).delete()
                         session.query(ProcessedReport).filter_by(report_id=item_id).delete()
+                        deleted_count += 1
                         
                 session.commit()
-                log.info("🗑️ Tüm sonuçlar sistemden tamamen silindi.")
+                log.info(f"🗑️ {deleted_count} adet rapor sistemden tamamen silindi.")
             except Exception as inner_error:
                 session.rollback()
                 log.error(f"Toplu veritabanı silme hatası: {inner_error}")
             finally:
                 db.Session.remove()
                 
+            return jsonify({"status": "deleted", "deleted_count": deleted_count})
+        except Exception as error:
+            log.error("Seçili sonuçlar DB'den silinirken hata: %s", str(error))
+            return jsonify({"error": "DB Silme başarısız"}), 500
+
+    @app.route("/api/results/fetch-db", methods=["POST"])
+    def fetch_results_from_db() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Veritabanında saklanan ancak listeden silinmiş olan PDF'leri ve arşivdeki Randevuları geri getirir."""
+        try:
+            pdfs: List[Dict[str, Any]] = db.list_pdfs(limit=2500)
+            
+            stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+            stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+            
+            existing_results_raw: Any = stored_data_safe.get("data", [])
+            existing_results: List[Dict[str, Any]] = []
+            
+            if isinstance(existing_results_raw, list):
+                raw_list: List[Any] = cast(List[Any], existing_results_raw)
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                        existing_results.append(item_map)
+                        
+            existing_map: Dict[str, Dict[str, Any]] = {_get_unique_key(r): r for r in existing_results}
+            
+            added_count: int = 0
+            
+            arch_data: Optional[Dict[str, Any]] = get_task_result("web_archived_results")
+            arch_safe: Dict[str, Any] = arch_data if arch_data else {}
+            arch_raw: Any = arch_safe.get("data", [])
+            
+            if isinstance(arch_raw, list):
+                raw_arch: List[Any] = cast(List[Any], arch_raw)
+                for item in raw_arch:
+                    if isinstance(item, dict):
+                        arch_item = cast(Dict[str, Any], item)
+                        uid = _get_unique_key(arch_item)
+                        if uid and uid not in existing_map:
+                            existing_map[uid] = arch_item
+                            added_count += 1
+            
+            for p in pdfs:
+                rid_raw: Any = p.get("report_id")
+                rid: str = str(rid_raw) if rid_raw else ""
+                if not rid:
+                    continue
+                    
+                if rid not in existing_map:
+                    new_rep: Dict[str, Any] = {
+                        "uuid": rid,
+                        "file_name": str(p.get("file_name", "")),
+                        "building_name": str(p.get("building", "")),
+                        "provider": str(p.get("provider", "")),
+                        "label_color": str(p.get("label_color", "")),
+                        "inspection_date": "Arşivden Yüklendi",
+                        "next_inspection": "-",
+                        "elevator_number": "-",
+                    }
+                    existing_map[rid] = new_rep
+                    added_count += 1
+                    
+            merged_results: List[Dict[str, Any]] = list(existing_map.values())
+            set_task_result("web_last_results", {"data": merged_results})
+            
+            log.info(f"📥 Veritabanından ve arşivden {added_count} adet kayıt başarıyla listeye okundu.")
+            return jsonify({"status": "fetched", "count": added_count})
+        except Exception as error:
+            log.error("DB verileri listeye aktarılırken hata: %s", str(error))
+            return jsonify({"error": "Aktarım başarısız"}), 500
+
+    @app.route("/api/results/clear-all", methods=["POST", "DELETE"])
+    def clear_all_results() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Ekranda listelenen tüm sonuçları sadece arayüzden (bellekten) siler ve arşive taşır, veritabanına dokunmaz."""
+        try:
+            stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+            stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+            
+            all_results_raw: Any = stored_data_safe.get("data", [])
+            all_results: List[Dict[str, Any]] = []
+            
+            if isinstance(all_results_raw, list):
+                raw_list: List[Any] = cast(List[Any], all_results_raw)
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                        all_results.append(item_map)
+                        
+            _backup_to_archive(all_results)
             set_task_result("web_last_results", {"data": []})
             
+            log.info("🗑️ Tüm sonuçlar ekran listesinden temizlendi (Veritabanı korundu).")
             return jsonify({"status": "cleared"})
         except Exception as error:
             log.error("Tüm sonuçlar temizlenirken hata: %s", str(error))
             return jsonify({"error": "Temizleme başarısız"}), 500
 
+    @app.route("/api/database/clear", methods=["POST", "DELETE"])
+    def clear_database() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Veritabanındaki tüm işlenmiş verileri (E-posta, Rapor, PDF) tamamen siler ve arayüzü sıfırlar."""
+        try:
+            deleted_count: int = db.clear_all_data()
+            set_task_result("web_last_results", {"data": []})
+            set_task_result("web_archived_results", {"data": []})
+            return jsonify({"status": "cleared", "deleted_count": deleted_count})
+        except Exception as error:
+            log.error("Veritabanı sıfırlanırken hata: %s", str(error))
+            return jsonify({"error": "Sıfırlama başarısız"}), 500
+
     @app.route("/api/config", methods=["GET"])
-    def get_api_config() -> Response:
+    def get_api_config() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Sistem yapılandırmasını döndürür."""
         return jsonify(load_config())
 
     @app.route("/api/config", methods=["POST"])
-    def update_config() -> Response:
+    def update_config() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Sistem yapılandırmasını günceller."""
         try:
-            new_config: Dict[str, Any] = request.get_json()
+            new_config_raw: Any = request.get_json()
+            new_config: Dict[str, Any] = {}
+            
+            if isinstance(new_config_raw, dict):
+                new_config = cast(Dict[str, Any], new_config_raw)
+                
             save_config(new_config)
             return jsonify({"status": "saved"})
         except Exception as e:
@@ -332,7 +625,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/scraping-profiles", methods=["GET"])
-    def get_profiles() -> Response:
+    def get_profiles() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Kazıma profillerini okur ve döndürür."""
         profile_path: Path = paths.SCRAPING_PROFILES
         try:
@@ -341,20 +634,22 @@ def create_app() -> Tuple[Flask, SocketIO]:
                 return jsonify({"error": "Scraping profili bulunamadı."}), 404
 
             with open(profile_path, "r", encoding="utf-8") as f:
-                return jsonify(json.load(f))
+                json_data: Any = json.load(f)
+                return jsonify(json_data)
         except Exception as e:
             log.error(f"Profil okuma hatası: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/scraping-profiles", methods=["POST"])
-    def save_profiles() -> Response:
+    def save_profiles() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Kazıma profillerini günceller."""
         profile_path: Path = paths.SCRAPING_PROFILES
         try:
             profile_path.parent.mkdir(parents=True, exist_ok=True)
+            new_profiles_raw: Any = request.get_json()
             
             with open(profile_path, "w", encoding="utf-8") as f:
-                json.dump(request.get_json(), f, ensure_ascii=False, indent=2)
+                json.dump(new_profiles_raw, f, ensure_ascii=False, indent=2)
             
             reload_profiles()
             return jsonify({"status": "saved"})
@@ -363,23 +658,26 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/pdfs", methods=["GET"])
-    def get_pdfs_list() -> Response:
+    def get_pdfs_list() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Kayıtlı PDF'lerin meta veri listesini döndürür."""
         try:
-            return jsonify(db.list_pdfs())
+            pdfs: List[Dict[str, Any]] = db.list_pdfs()
+            return jsonify(pdfs)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/pdfs/<int:pdf_id>/download", methods=["GET"])
-    def download_pdf(pdf_id: int) -> Response:
+    def download_pdf(pdf_id: int) -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Belirtilen PDF dosyasını veritabanından çekerek indirir."""
         try:
             pdf_data: Optional[Dict[str, Any]] = db.get_pdf(pdf_id)
             if not pdf_data:
                 return jsonify({"error": "PDF veritabanında bulunamadı"}), 404
             
-            file_name: str = pdf_data.get("file_name", f"rapor_{pdf_id}.pdf")
-            file_bytes: bytes = pdf_data.get("file_data", b"")
+            file_name_raw: Any = pdf_data.get("file_name", f"rapor_{pdf_id}.pdf")
+            file_name: str = str(file_name_raw)
+            file_bytes_raw: Any = pdf_data.get("file_data", b"")
+            file_bytes: bytes = file_bytes_raw if isinstance(file_bytes_raw, bytes) else b""
             
             return send_file(
                 BytesIO(file_bytes), 
@@ -392,15 +690,17 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": "İndirme başarısız"}), 500
 
     @app.route("/api/pdf/by-report/<report_id>", methods=["GET"])
-    def download_pdf_by_report(report_id: str) -> Response:
+    def download_pdf_by_report(report_id: str) -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Spesifik rapora ait PDF dosyasını döndürür."""
         try:
             pdf_data: Optional[Dict[str, Any]] = db.get_pdf_by_report(report_id)
             if not pdf_data:
                 return jsonify({"error": "PDF veritabanında bulunamadı"}), 404
             
-            file_name: str = pdf_data.get("file_name", f"rapor_{report_id}.pdf")
-            file_bytes: bytes = pdf_data.get("file_data", b"")
+            file_name_raw: Any = pdf_data.get("file_name", f"rapor_{report_id}.pdf")
+            file_name: str = str(file_name_raw)
+            file_bytes_raw: Any = pdf_data.get("file_data", b"")
+            file_bytes: bytes = file_bytes_raw if isinstance(file_bytes_raw, bytes) else b""
             
             return send_file(
                 BytesIO(file_bytes), 
@@ -413,7 +713,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": "İndirme başarısız"}), 500
 
     @app.route("/api/maintenance/cleanup", methods=["POST"])
-    def run_cleanup() -> Response:
+    def run_cleanup() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Gelen kutusundaki işlenmiş e-postaların etiketlerini temizler."""
         def _bg_cleanup() -> None:
             try:
@@ -427,7 +727,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
         return jsonify({"status": "started", "action": "cleanup"})
 
     @app.route("/api/maintenance/trash", methods=["POST"])
-    def run_trash() -> Response:
+    def run_trash() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Yapılandırılmış kurallara uyan e-postaları çöpe atar."""
         def _bg_trash() -> None:
             try:
@@ -441,7 +741,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
         return jsonify({"status": "started", "action": "trash"})
 
     @app.route("/api/maintenance/delete-labels", methods=["POST"])
-    def run_delete_labels() -> Response:
+    def run_delete_labels() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Kullanılmayan veya silinmesi gereken Gmail etiketlerini kalıcı olarak siler."""
         def _bg_label_del() -> None:
             try:
@@ -455,12 +755,12 @@ def create_app() -> Tuple[Flask, SocketIO]:
         return jsonify({"status": "started", "action": "delete_labels"})
 
     @app.route("/api/logs", methods=["GET"])
-    def logs() -> Response:
+    def logs() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Son log kayıtlarını döndürür."""
         return jsonify(get_recent_logs(500))
 
     @app.route("/api/auth/status")
-    def auth_status() -> Response:
+    def auth_status() -> Response:  # pyright: ignore[reportUnusedFunction]
         """Gmail yetkilendirme durumunu döndürür."""
         from app.gmail.auth import get_pending_auth_url, needs_auth
         
@@ -478,20 +778,25 @@ def create_app() -> Tuple[Flask, SocketIO]:
         })
 
     @app.route("/api/auth/upload/<filetype>", methods=["POST"])
-    def upload_auth_file(filetype: str) -> Response:
+    def upload_auth_file(filetype: str) -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Kullanıcının yüklediği yapılandırma dosyalarını şifreleyip veritabanına kaydeder."""
         if filetype not in ("credentials", "token"):
             return jsonify({"error": "Geçersiz dosya tipi"}), 400
             
-        auth_file: Any = request.files.get("file")
+        auth_file: Optional[FileStorage] = request.files.get("file")
         if not auth_file:
             return jsonify({"error": "Dosya bulunamadı"}), 400
             
         try:
-            file_content: str = auth_file.read().decode('utf-8')
-            json_data: Dict[str, Any] = json.loads(file_content)
+            file_content_raw: bytes = auth_file.read()
+            file_content: str = file_content_raw.decode('utf-8')
+            json_data_raw: Any = json.loads(file_content)
             
-            set_secure_config(f"auth_{filetype}", json_data)
+            if isinstance(json_data_raw, dict):
+                json_data: Dict[str, Any] = cast(Dict[str, Any], json_data_raw)
+                set_secure_config(f"auth_{filetype}", json_data)
+            else:
+                return jsonify({"error": "JSON içeriği geçerli bir sözlük değil"}), 400
                 
             fname: str = f"{filetype}.json"
             if os.path.exists(fname):
@@ -512,7 +817,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": "Yükleme başarısız"}), 500
 
     @app.route("/api/auth/download/<filetype>")
-    def download_auth_file(filetype: str) -> Response:
+    def download_auth_file(filetype: str) -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Yetkilendirme dosyalarını veritabanından çözüp JSON olarak indirir."""
         if filetype not in ("credentials", "token"):
             return jsonify({"error": "Geçersiz dosya tipi"}), 400
@@ -535,7 +840,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": "İndirme başarısız"}), 500
 
     @app.route("/api/auth/delete/<filetype>", methods=["DELETE"])
-    def delete_auth_file(filetype: str) -> Response:
+    def delete_auth_file(filetype: str) -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
         """Belirtilen yetkilendirme dosyasını veritabanından tamamen siler."""
         if filetype not in ("credentials", "token"):
             return jsonify({"error": "Geçersiz dosya tipi"}), 400
@@ -561,7 +866,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             return jsonify({"error": "Silme başarısız"}), 500
 
     @socketio.on("connect", namespace="/logs")
-    def on_connect() -> None:
+    def on_connect() -> None:  # pyright: ignore[reportUnusedFunction]
         """Yeni bir istemci bağlantısı sağlandığında çalışır."""
         pass
 
@@ -579,10 +884,10 @@ def start_server(host: str = "127.0.0.1", port: int = 5001) -> None:
     socketio: SocketIO
     app, socketio = create_app()
     
-    setup_logging(level=os.environ.get("LOG_LEVEL", "INFO"), log_file=paths.DEFAULT_LOG_PATH)
+    setup_logging(level=os.environ.get("LOG_LEVEL", "INFO"), log_file=str(paths.DEFAULT_LOG_PATH))
     log.info("🌐 Web arayüzü başlatılıyor: http://%s:%s", host, port)
 
     wz_logger: logging.Logger = logging.getLogger('werkzeug')
     wz_logger.setLevel(logging.ERROR)
 
-    socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)
+    socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)  # pyright: ignore[reportUnknownMemberType]
