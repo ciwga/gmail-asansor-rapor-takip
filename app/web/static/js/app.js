@@ -41,7 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   document.getElementById('menuToggle').onclick = () => {
-    document.getElementById('sidebar').classList.toggle('open');
+    const sb = document.getElementById('sidebar');
+    if (window.innerWidth <= 768) {
+      sb.classList.toggle('open');
+    } else {
+      sb.classList.toggle('closed');
+    }
   };
 });
 
@@ -53,11 +58,18 @@ function initThemeAndView() {
   const savedTheme = localStorage.getItem('appTheme');
   if (savedTheme) {
     document.body.className = savedTheme;
+  } else {
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.body.className = 'theme-dark';
+    } else {
+      document.body.className = 'theme-light';
+    }
   }
   
   const savedView = localStorage.getItem('appViewMode');
   if (savedView === 'grid') {
     document.getElementById('resultList').classList.add('grid-view');
+    document.getElementById('listControls').classList.add('grid-view-active');
   }
 }
 
@@ -67,8 +79,7 @@ function initThemeAndView() {
  */
 function toggleTheme() {
   const body = document.body;
-  const isDark = body.classList.contains('theme-dark') || 
-                 (!body.classList.contains('theme-light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const isDark = body.classList.contains('theme-dark');
                  
   if (isDark) {
     body.className = 'theme-light';
@@ -85,7 +96,10 @@ function toggleTheme() {
  */
 function toggleViewMode() {
   const list = document.getElementById('resultList');
+  const controls = document.getElementById('listControls');
+  
   list.classList.toggle('grid-view');
+  controls.classList.toggle('grid-view-active');
   
   if (list.classList.contains('grid-view')) {
     localStorage.setItem('appViewMode', 'grid');
@@ -557,9 +571,131 @@ function loadResults() {
       if (Array.isArray(d) && d.length) {
         allResults = d;
         renderResults(d);
+      } else {
+        allResults = [];
+        renderResults([]);
       }
     })
     .catch(() => {});
+}
+
+/**
+ * Listede listelenen kayıtların tümünü seçer ya da seçimi kaldırır.
+ * * @param {HTMLInputElement} cb 
+ * @returns {void}
+ */
+function toggleSelectAll(cb) {
+  const checkboxes = document.querySelectorAll('.row-select-cb');
+  checkboxes.forEach(c => c.checked = cb.checked);
+  updateSelectedCount();
+}
+
+/**
+ * Kullanıcının işaretlediği kayıt sayısını günceller.
+ * * @returns {void}
+ */
+function updateSelectedCount() {
+  const count = document.querySelectorAll('.row-select-cb:checked').length;
+  document.getElementById('selectedCount').textContent = count + ' Seçildi';
+}
+
+/**
+ * Arayüzde seçilmiş olan tüm satırların kimliklerini okur.
+ * * @returns {Array<string>}
+ */
+function getSelectedIds() {
+  return Array.from(document.querySelectorAll('.row-select-cb:checked')).map(c => c.value);
+}
+
+/**
+ * Kullanıcının seçtiği kayıtları YALNIZCA arayüz listesinden kaldırır.
+ * * @returns {void}
+ */
+function deleteSelectedList() {
+  const ids = getSelectedIds();
+  if (!ids.length) {
+    alert('Lütfen listeden kaldırılacak kayıtları seçin.');
+    return;
+  }
+  
+  if (!confirm(ids.length + ' adet seçili kayıt sadece mevcut ekrandaki listeden silinsin mi? (Veritabanında kalmaya devam edecek)')) {
+    return;
+  }
+  
+  fetch('/api/results/delete-selected', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids })
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'deleted') {
+        allResults = allResults.filter(r => !ids.includes(r.uuid || r.file_name));
+        renderResults(allResults);
+      } else {
+        alert('Hata: ' + (d.error || 'İşlem gerçekleştirilemedi.'));
+      }
+    })
+    .catch(e => alert('Bağlantı hatası: ' + e));
+}
+
+/**
+ * Kullanıcının seçtiği kayıtları VERİTABANINDAN KALICI olarak siler.
+ * * @returns {void}
+ */
+function deleteSelectedDB() {
+  const ids = getSelectedIds();
+  if (!ids.length) {
+    alert('Lütfen veritabanından silinecek kayıtları seçin.');
+    return;
+  }
+  
+  if (!confirm('DİKKAT: ' + ids.length + ' adet seçili kayıt VERİTABANINDAN (PDF dahil) kalıcı olarak silinsin mi?')) {
+    return;
+  }
+  
+  fetch('/api/database/delete-selected', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids })
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'deleted') {
+        allResults = allResults.filter(r => !ids.includes(r.uuid || r.file_name));
+        renderResults(allResults);
+        alert(d.deleted_count + ' kayıt sistemden tamamen silindi.');
+      } else {
+        alert('Hata: ' + (d.error || 'İşlem gerçekleştirilemedi.'));
+      }
+    })
+    .catch(e => alert('Bağlantı hatası: ' + e));
+}
+
+/**
+ * Veritabanında saklı olan tüm eski raporları listeye geri çağırır.
+ * * @returns {void}
+ */
+function fetchFromDB() {
+  if (!confirm('Veritabanındaki kayıtlı tüm geçmiş raporlar listeye eklensin mi?')) {
+    return;
+  }
+  
+  fetch('/api/results/fetch-db', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'fetched') {
+        loadResults();
+        if (d.count > 0) {
+            alert('Veritabanından ' + d.count + ' yeni kayıt başarıyla listeye getirildi.');
+        } else {
+            alert('Eklenecek yeni geçmiş kayıt bulunamadı (Tümü zaten listede mevcut).');
+        }
+      } else {
+        alert('Hata: ' + (d.error || 'İşlem gerçekleştirilemedi.'));
+      }
+    })
+    .catch(e => alert('Bağlantı hatası: ' + e));
 }
 
 /**
@@ -574,6 +710,8 @@ function renderResults(results) {
   
   if (!sorted.length) {
     list.innerHTML = '<div class="empty-state"><p>Henüz sonuç yok.</p></div>';
+    document.getElementById('selectAllCheckbox').checked = false;
+    updateSelectedCount();
     return;
   }
   
@@ -589,8 +727,12 @@ function renderResults(results) {
     const urg = urgency(nx);
     const isR = lbl.toLowerCase().includes('randevu');
     const hasP = uid && uid !== 'N/A' && !isR;
+    const safeUid = uid || r.file_name || '';
     
     return `<div class="result-row" onclick="showDetail(${oi})">
+      <div class="result-select" style="display:flex;align-items:center;padding-right:12px" onclick="event.stopPropagation()">
+        <input type="checkbox" class="row-select-cb" value="${esc(safeUid)}" onchange="updateSelectedCount()" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);">
+      </div>
       <div class="result-label">${ic}</div>
       <div class="result-main">
         <div class="result-building">${esc(bld)}</div>
@@ -604,10 +746,12 @@ function renderResults(results) {
       </div>
       <div class="result-actions">
         ${hasP ? `<button class="btn-row" onclick="event.stopPropagation();openPdf('${esc(uid)}')" title="PDF Aç">📄</button>` : ''}
-        <button class="btn-row delete" onclick="event.stopPropagation();deleteResult('${esc(uid || r.file_name || '')}')" title="${isR ? 'Kaldır' : 'Sil'}">🗑</button>
       </div>
     </div>`;
   }).join('');
+  
+  document.getElementById('selectAllCheckbox').checked = false;
+  updateSelectedCount();
 }
 
 /**
@@ -723,11 +867,11 @@ function openPdf(rid) {
 }
 
 /**
- * Görüntülenen tüm sonuçları kalıcı olarak temizler.
+ * Görüntülenen tüm sonuçları listeden kaldırır.
  * * @returns {void}
  */
 function deleteAllResults() {
-  if (!confirm('TÜM sonuçlar silinsin mi? Bu işlem geri alınamaz.')) {
+  if (!confirm('Arayüzdeki sonuçlar listeden silinsin mi? (Bu işlem sadece görünen listeyi temizler, veritabanına dokunmaz)')) {
     return;
   }
   fetch('/api/results/clear-all', {
@@ -741,6 +885,31 @@ function deleteAllResults() {
         renderResults([]);
       }
     });
+}
+
+/**
+ * Veritabanındaki tüm kayıtları kalıcı olarak temizler.
+ * * @returns {void}
+ */
+function clearDatabase() {
+  if (!confirm('DİKKAT: Veritabanındaki tüm işlenmiş e-posta geçmişi, rapor verileri ve indirilen PDF kayıtları kalıcı olarak silinecek! (Ayarlarınız ve yetkilendirmeleriniz korunur)\n\nE-postaların tekrar ilk günkü gibi taranabilmesini sağlayacak bu işlem geri alınamaz. Onaylıyor musunuz?')) {
+    return;
+  }
+  fetch('/api/database/clear', {
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' }
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'cleared') {
+        allResults = [];
+        renderResults([]);
+        alert(`Veritabanı başarıyla tamamen sıfırlandı. Toplam ${d.deleted_count} kayıt silindi.`);
+      } else {
+        alert('Hata: ' + (d.error || 'Bilinmeyen bir hata oluştu.'));
+      }
+    })
+    .catch(e => alert('Bağlantı hatası: ' + e));
 }
 
 /**
@@ -847,7 +1016,10 @@ function showDetail(i) {
   
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawerOverlay').classList.add('open');
-  document.getElementById('sidebar').classList.remove('open');
+  const sb = document.getElementById('sidebar');
+  if (window.innerWidth <= 768) {
+    sb.classList.remove('open');
+  }
 }
 
 /**
@@ -860,7 +1032,17 @@ function closeDrawer() {
 }
 
 /**
- * Arayüze log satırı ekler.
+ * Terminal ANSI renk ve format kodlarını (ör: \x1b[37m) metinden tamamen temizler.
+ * @param {string} str İşlenecek metin.
+ * @returns {string} Temizlenmiş salt metin.
+ */
+function stripAnsi(str) {
+  if (!str) return '';
+  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+}
+
+/**
+ * Arayüze log satırı ekler. Terminal ANSI kodlarını otomatik olarak ayıklar.
  * * @param {Object} e 
  * @returns {void}
  */
@@ -869,8 +1051,11 @@ function appendLog(e) {
   const d = document.createElement('div');
   d.className = 'log-entry';
   
-  const l = (e.level || 'INFO').replace(/\s/g, '');
-  d.innerHTML = `<span class="log-time">${esc(e.time || '')}</span> <span class="log-level-${l}">[${l}]</span> ${esc(e.message || '')}`;
+  const safeTime = stripAnsi(e.time || '');
+  const safeLevel = stripAnsi(e.level || 'INFO').replace(/\s/g, '');
+  const safeMsg = stripAnsi(e.message || '');
+  
+  d.innerHTML = `<span class="log-time">${esc(safeTime)}</span> <span class="log-level-${safeLevel}">[${safeLevel}]</span> ${esc(safeMsg)}`;
   
   c.appendChild(d);
   
@@ -1391,7 +1576,11 @@ function switchPanel(el) {
   
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + panelName).classList.add('active');
-  document.getElementById('sidebar').classList.remove('open');
+  
+  const sb = document.getElementById('sidebar');
+  if (window.innerWidth <= 768) {
+    sb.classList.remove('open');
+  }
   
   history.replaceState(null, null, '#' + panelName);
   
