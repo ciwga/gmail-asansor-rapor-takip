@@ -407,7 +407,8 @@ def create_app() -> Tuple[Flask, SocketIO]:
             if not isinstance(ids_raw, list):
                 return jsonify({"error": "ID listesi bulunamadı"}), 400
                 
-            ids_to_delete: List[str] = [str(i) for i in ids_raw]
+            raw_ids_list: List[Any] = cast(List[Any], ids_raw)
+            ids_to_delete: List[str] = [str(i) for i in raw_ids_list]
             
             stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
             stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
@@ -455,7 +456,8 @@ def create_app() -> Tuple[Flask, SocketIO]:
             if not isinstance(ids_raw, list):
                 return jsonify({"error": "ID listesi bulunamadı"}), 400
                 
-            ids_to_delete: List[str] = [str(i) for i in ids_raw]
+            raw_ids_list: List[Any] = cast(List[Any], ids_raw)
+            ids_to_delete: List[str] = [str(i) for i in raw_ids_list]
             
             stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
             stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
@@ -530,8 +532,8 @@ def create_app() -> Tuple[Flask, SocketIO]:
                 raw_arch: List[Any] = cast(List[Any], arch_raw)
                 for item in raw_arch:
                     if isinstance(item, dict):
-                        arch_item = cast(Dict[str, Any], item)
-                        uid = _get_unique_key(arch_item)
+                        arch_item: Dict[str, Any] = cast(Dict[str, Any], item)
+                        uid: str = _get_unique_key(arch_item)
                         if uid and uid not in existing_map:
                             existing_map[uid] = arch_item
                             added_count += 1
