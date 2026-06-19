@@ -15,13 +15,14 @@
     </div>
     <div class="topbar-right" style="display: flex; align-items: center; gap: 10px;">
       <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Tema Değiştir">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
       </button>
       <span class="status-badge" id="statusBadge" onclick="onStatusTap()">Hazır</span>
     </div>
   </header>
 
-  <div class="app-layout">
+  <div class="app-layout" id="appLayout">
     <nav class="sidebar" id="sidebar">
       <button class="run-btn" id="runBtn" onclick="startRun()">▶ İşlemi Başlat</button>
       <div class="nav-item active" data-panel="inbox" onclick="switchPanel(this)"><span>📥 Sonuçlar</span><span class="badge" id="resultCount">0</span></div>
@@ -53,9 +54,25 @@
             <select id="filterLabel" onchange="filterResults()">
               <option value="">Tümü</option><option value="Kırmızı">🔴 Kırmızı</option><option value="Sarı">🟡 Sarı</option><option value="Mavi">🔵 Mavi</option><option value="Yeşil">🟢 Yeşil</option><option value="Randevu">📆 Randevu</option>
             </select>
-            <button class="btn-sm" onclick="deleteAllResults()" title="Tüm sonuçları sil">🗑</button>
+            <button class="btn-sm" onclick="fetchFromDB()" style="color: var(--green); border-color: var(--green);" title="Veritabanındaki geçmiş kayıtları listeye aktar">📥 DB'den Getir</button>
+            <button class="btn-sm" onclick="deleteSelectedList()" style="color: var(--orange); border-color: var(--orange);" title="Seçilen sonuçları sadece ekrandan kaldır">➖ Seçileni Çıkar</button>
+            <button class="btn-sm" onclick="deleteSelectedDB()" style="color: var(--red); border-color: var(--red);" title="Seçilen sonuçları veritabanından kalıcı olarak sil">🗑 Seçileni DB'den Sil</button>
+            <button class="btn-sm" onclick="deleteAllResults()" title="Görüntülenen tüm sonuçları listeden sil (DB'ye dokunmaz)">🗑 Liste</button>
+            <button class="btn-sm" onclick="clearDatabase()" title="Veritabanındaki tüm kayıtları (Raporlar, PDF'ler, İşlenmiş E-postalar) tamamen temizle" style="color: var(--red); border-color: var(--red);">💣 DB Sıfırla</button>
           </div>
         </div>
+        
+        <div class="list-controls" id="listControls">
+          <div class="result-select" style="display:flex;align-items:center;justify-content:center;">
+            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent);">
+          </div>
+          <div class="header-col header-icon" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: center;">Durum</div>
+          <div class="header-col header-main" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Bina / Firma Bilgisi</div>
+          <div class="header-col header-date" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: right;">Kontrol Tarihi</div>
+          <div class="header-col header-next" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: right;">Sonraki Kontrol</div>
+          <div class="header-col header-actions" style="font-size: 13px; font-weight: 600; color: var(--accent); text-align: right; display: flex; align-items: center; justify-content: flex-end;"><span id="selectedCount">0 Seçildi</span></div>
+        </div>
+
         <div class="progress-wrap" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
         <div class="scroll-body" id="resultList">
           <div class="empty-state"><p>Henüz sonuç yok.</p></div>
