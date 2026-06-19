@@ -6,12 +6,12 @@ ACID uyumlu, Thread-Safe oturum yönetimleri sunar.
 import os
 import logging
 import json
-from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Set, Any, Optional, List
+from typing import Dict, Set, Any, Optional, List, cast
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker, scoped_session, Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from cryptography.fernet import Fernet
@@ -31,7 +31,7 @@ def _get_encryption_key() -> bytes:
     Returns:
         bytes: Üretilen veya diskten okunan AES-256 uyumlu şifreleme anahtarı.
     """
-    key_path: str = paths.MASTER_KEY_FILE
+    key_path: str = str(paths.MASTER_KEY_FILE)
     
     if os.path.exists(key_path):
         with open(key_path, "rb") as f:
@@ -52,9 +52,9 @@ def _get_encryption_key() -> bytes:
 
 _cipher: Fernet = Fernet(_get_encryption_key())
 
-_engine: Any = None
-_session_factory: sessionmaker = sessionmaker()
-SessionScoped: scoped_session = scoped_session(_session_factory)
+_engine: Optional[Engine] = None
+_session_factory: "sessionmaker[Session]" = sessionmaker()
+SessionScoped: "scoped_session[Session]" = scoped_session(_session_factory)
 
 
 def _get_db_path() -> str:
@@ -76,7 +76,7 @@ def _get_db_path() -> str:
     return os.path.join(project_root, path_str)
 
 
-def _init_db(path: Optional[str] = None) -> Any:
+def _init_db(path: Optional[str] = None) -> Engine:
     """Veritabanı motorunu başlatır ve tabloları güvenceye alır.
     
     Geçersiz veya boş veritabanı yollarının in-memory
@@ -86,7 +86,7 @@ def _init_db(path: Optional[str] = None) -> Any:
         path (Optional[str]): Veritabanı dosya yolu. Belirtilmezse otomatik tespit eder.
         
     Returns:
-        Any: Başlatılmış ve yapılandırılmış SQLAlchemy Engine nesnesi.
+        Engine: Başlatılmış ve yapılandırılmış SQLAlchemy Engine nesnesi.
     """
     global _engine
     
@@ -112,11 +112,11 @@ def _init_db(path: Optional[str] = None) -> Any:
     return _engine
 
 
-def _get_default_session() -> Any:
+def _get_default_session() -> Session:
     """Modül seviyesindeki fonksiyonlar için varsayılan Thread-Safe oturumu döndürür.
     
     Returns:
-        Any: Başlatılmış SQLAlchemy oturum (Session) nesnesi.
+        Session: Başlatılmış SQLAlchemy oturum (Session) nesnesi.
     """
     global _engine
     
@@ -135,10 +135,14 @@ def get_task_result(task_name: str) -> Optional[Dict[str, Any]]:
     Returns:
         Optional[Dict[str, Any]]: Görev sonucunu barındıran veri kümesi veya bulunamazsa None.
     """
-    session: Any = _get_default_session()
+    session: Session = _get_default_session()
     try:
-        task = session.query(TaskResult).filter_by(task_name=task_name).first()
-        return {"data": task.result_data} if task and task.result_data else None
+        task: Optional[TaskResult] = session.query(TaskResult).filter_by(task_name=task_name).first()
+        if task is not None:
+            result_data: Any = getattr(task, "result_data", None)
+            if result_data is not None:
+                return {"data": result_data}
+        return None
     finally:
         SessionScoped.remove()
 
@@ -153,16 +157,16 @@ def set_task_result(task_name: str, data: Dict[str, Any]) -> None:
     Raises:
         Exception: Veritabanı commit veya kayıt işlemi sırasında oluşan hataları fırlatır.
     """
-    session: Any = _get_default_session()
+    session: Session = _get_default_session()
     try:
-        task = session.query(TaskResult).filter_by(task_name=task_name).first()
+        task: Optional[TaskResult] = session.query(TaskResult).filter_by(task_name=task_name).first()
         result_data: Any = data.get("data", [])
         
-        if not task:
+        if task is None:
             task = TaskResult(task_name=task_name, result_data=result_data)
             session.add(task)
         else:
-            task.result_data = result_data
+            setattr(task, "result_data", result_data)
             flag_modified(task, "result_data")
             
         session.commit()
@@ -183,19 +187,27 @@ def get_secure_config(key: str) -> Optional[Dict[str, Any]]:
     Returns:
         Optional[Dict[str, Any]]: Çözülmüş yapılandırma sözlüğü veya bulunamazsa None.
     """
-    session: Any = _get_default_session()
+    session: Session = _get_default_session()
     try:
-        record = session.query(AppConfig).filter_by(config_key=key).first()
+        record: Optional[AppConfig] = session.query(AppConfig).filter_by(config_key=key).first()
         
-        if record and record.config_value:
-            enc_data: Optional[str] = record.config_value.get("encrypted_data")
+        if record is not None:
+            config_val_raw: Any = getattr(record, "config_value", None)
             
-            if enc_data:
-                decrypted_bytes: bytes = _cipher.decrypt(enc_data.encode('utf-8'))
-                return json.loads(decrypted_bytes.decode('utf-8'))
+            if isinstance(config_val_raw, dict):
+                config_val = cast(Dict[str, Any], config_val_raw)
+                enc_data: Optional[Any] = config_val.get("encrypted_data")
                 
-            return record.config_value
-            
+                if isinstance(enc_data, str):
+                    decrypted_bytes: bytes = _cipher.decrypt(enc_data.encode('utf-8'))
+                    parsed_json: Any = json.loads(decrypted_bytes.decode('utf-8'))
+                    
+                    if isinstance(parsed_json, dict):
+                        return cast(Dict[str, Any], parsed_json)
+                    return {}
+                    
+                return config_val
+                
         return None
     finally:
         SessionScoped.remove()
@@ -211,20 +223,20 @@ def set_secure_config(key: str, value: Dict[str, Any]) -> None:
     Raises:
         Exception: Şifreleme veya veritabanına yazma sırasında oluşabilecek hataları fırlatır.
     """
-    session: Any = _get_default_session()
+    session: Session = _get_default_session()
     try:
         json_str: str = json.dumps(value)
         encrypted_bytes: bytes = _cipher.encrypt(json_str.encode('utf-8'))
         
         secure_payload: Dict[str, str] = {"encrypted_data": encrypted_bytes.decode('utf-8')}
 
-        record = session.query(AppConfig).filter_by(config_key=key).first()
+        record: Optional[AppConfig] = session.query(AppConfig).filter_by(config_key=key).first()
         
-        if not record:
+        if record is None:
             record = AppConfig(config_key=key, config_value=secure_payload)
             session.add(record)
         else:
-            record.config_value = secure_payload
+            setattr(record, "config_value", secure_payload)
             flag_modified(record, "config_value")
             
         session.commit()
@@ -245,7 +257,7 @@ def delete_secure_config(key: str) -> bool:
     Returns:
         bool: İşlem başarılı ise True, kayıt bulunamadıysa veya hata varsa False.
     """
-    session: Any = _get_default_session()
+    session: Session = _get_default_session()
     try:
         deleted: int = session.query(AppConfig).filter_by(config_key=key).delete()
         session.commit()
@@ -265,8 +277,8 @@ class Database:
     
     Attributes:
         _path (str): SQLite veritabanı dosyasının yolu.
-        engine (Any): SQLAlchemy engine nesnesi.
-        Session (scoped_session): Güvenli işlemler için thread-local oturum nesnesi.
+        engine (Engine): SQLAlchemy engine nesnesi.
+        Session (scoped_session[Session]): Güvenli işlemler için thread-local oturum nesnesi.
     """
 
     def __init__(self, path: Optional[str] = None) -> None:
@@ -279,8 +291,8 @@ class Database:
             path = _get_db_path()
             
         self._path: str = path
-        self.engine: Any = _init_db(path)
-        self.Session: scoped_session = SessionScoped
+        self.engine: Engine = _init_db(path)
+        self.Session: "scoped_session[Session]" = SessionScoped
 
     def close(self) -> None:
         """Mevcut iş parçacığındaki veritabanı oturumunu güvenli bir şekilde kapatır."""
@@ -292,15 +304,22 @@ class Database:
         Returns:
             Dict[str, Dict[str, Any]]: email_id anahtarlı durum haritası.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
             records: List[ProcessedEmail] = session.query(ProcessedEmail).all()
-            return {
-                r.email_id: {
-                    "fail_count": r.fail_count, 
-                    "last_fail_time": r.last_fail_time.isoformat() if r.last_fail_time else None
-                } for r in records
-            }
+            result: Dict[str, Dict[str, Any]] = {}
+            
+            for r in records:
+                email_id_raw: Any = getattr(r, "email_id", "")
+                fail_count_raw: Any = getattr(r, "fail_count", 0)
+                last_fail_raw: Any = getattr(r, "last_fail_time", None)
+                
+                result[str(email_id_raw)] = {
+                    "fail_count": fail_count_raw,
+                    "last_fail_time": last_fail_raw.isoformat() if last_fail_raw else None
+                }
+                
+            return result
         finally:
             self.Session.remove()
 
@@ -310,10 +329,10 @@ class Database:
         Returns:
             Set[str]: Benzersiz rapor kimliklerini içeren küme.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            records = session.query(ProcessedReport.report_id).all()
-            return {r[0] for r in records}
+            records: List[Any] = session.query(ProcessedReport.report_id).all()
+            return {str(r[0]) for r in records}
         finally:
             self.Session.remove()
 
@@ -324,11 +343,11 @@ class Database:
             email_id (str): İşlenen e-postanın benzersiz kimliği.
             email_type (str): E-posta türü (örn: 'normal', 'randevu'). Varsayılan "normal".
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            email = session.query(ProcessedEmail).filter_by(email_id=email_id).first()
+            email: Optional[ProcessedEmail] = session.query(ProcessedEmail).filter_by(email_id=email_id).first()
             
-            if not email:
+            if email is None:
                 email = ProcessedEmail(
                     email_id=email_id, 
                     processed_at=datetime.now(),
@@ -337,10 +356,10 @@ class Database:
                 )
                 session.add(email)
             else:
-                email.processed_at = datetime.now()
-                email.fail_count = 0
-                email.last_fail_time = None
-                email.email_type = email_type
+                setattr(email, "processed_at", datetime.now())
+                setattr(email, "fail_count", 0)
+                setattr(email, "last_fail_time", None)
+                setattr(email, "email_type", email_type)
                 
             session.commit()
         except Exception as e:
@@ -355,11 +374,11 @@ class Database:
         Args:
             report_id (str): İşlenen raporun benzersiz kimliği.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            report = session.query(ProcessedReport).filter_by(report_id=report_id).first()
+            report: Optional[ProcessedReport] = session.query(ProcessedReport).filter_by(report_id=report_id).first()
             
-            if not report:
+            if report is None:
                 report = ProcessedReport(report_id=report_id, processed_at=datetime.now())
                 session.add(report)
                 session.commit()
@@ -375,11 +394,11 @@ class Database:
         Args:
             email_id (str): Hataya neden olan e-postanın kimliği.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            email = session.query(ProcessedEmail).filter_by(email_id=email_id).first()
+            email: Optional[ProcessedEmail] = session.query(ProcessedEmail).filter_by(email_id=email_id).first()
             
-            if not email:
+            if email is None:
                 email = ProcessedEmail(
                     email_id=email_id,
                     fail_count=1,
@@ -387,9 +406,10 @@ class Database:
                 )
                 session.add(email)
             else:
-                email.fail_count += 1
-                email.last_fail_time = datetime.now()
-                email.processed_at = None
+                current_fail_count: int = getattr(email, "fail_count", 0)
+                setattr(email, "fail_count", current_fail_count + 1)
+                setattr(email, "last_fail_time", datetime.now())
+                setattr(email, "processed_at", None)
                 
             session.commit()
         except Exception as e:
@@ -407,7 +427,7 @@ class Database:
         Returns:
             int: Silinen toplam kayıt sayısı.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
             threshold_date: datetime = datetime.now() - timedelta(days=days)
             
@@ -430,6 +450,33 @@ class Database:
         except Exception as e:
             session.rollback()
             log.error(f"Veritabanı temizlik işlemi sırasında hata: {e}")
+            return 0
+        finally:
+            self.Session.remove()
+
+    def clear_all_data(self) -> int:
+        """Tüm işlenmiş e-posta, rapor ve PDF kayıtlarını veritabanından kalıcı olarak siler.
+
+        Bu işlem yapılandırma (AppConfig) ve görev (TaskResult) verilerine dokunmaz.
+        E-postaların tekrar en baştan taranabilmesi için tüm okundu bayraklarını sıfırlar.
+
+        Returns:
+            int: Silinen toplam veri ve kayıt sayısı.
+        """
+        session: Session = self.Session()
+        try:
+            deleted_pdfs: int = session.query(PdfFile).delete()
+            deleted_reports: int = session.query(ProcessedReport).delete()
+            deleted_emails: int = session.query(ProcessedEmail).delete()
+            
+            session.commit()
+            total_deleted: int = deleted_pdfs + deleted_reports + deleted_emails
+            
+            log.info(f"💣 Veritabanı tamamen sıfırlandı: Toplam {total_deleted} kayıt silindi.")
+            return total_deleted
+        except Exception as e:
+            session.rollback()
+            log.error(f"Veritabanı tamamen sıfırlanırken hata oluştu: {e}")
             return 0
         finally:
             self.Session.remove()
@@ -457,19 +504,19 @@ class Database:
             with open(file_path, "rb") as f:
                 data: bytes = f.read()
                 
-            session: Any = self.Session()
+            session: Session = self.Session()
             try:
-                existing = session.query(PdfFile).filter_by(
+                existing: Optional[PdfFile] = session.query(PdfFile).filter_by(
                     report_id=report_id, file_name=file_name
                 ).first()
                 
-                if existing:
-                    existing.file_data = data
-                    existing.file_size = len(data)
-                    existing.building = building
-                    existing.provider = provider
-                    existing.label_color = label_color
-                    existing.stored_at = datetime.now()
+                if existing is not None:
+                    setattr(existing, "file_data", data)
+                    setattr(existing, "file_size", len(data))
+                    setattr(existing, "building", building)
+                    setattr(existing, "provider", provider)
+                    setattr(existing, "label_color", label_color)
+                    setattr(existing, "stored_at", datetime.now())
                 else:
                     new_pdf = PdfFile(
                         report_id=report_id,
@@ -504,23 +551,25 @@ class Database:
         Returns:
             Optional[Dict[str, Any]]: PDF verilerini içeren sözlük veya bulunamazsa None.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            record = session.query(PdfFile).filter_by(id=pdf_id).first()
+            record: Optional[PdfFile] = session.query(PdfFile).filter_by(id=pdf_id).first()
             
-            if not record:
+            if record is None:
                 return None
                 
+            stored_at_raw: Any = getattr(record, "stored_at", None)
+            
             return {
-                "id": record.id, 
-                "report_id": record.report_id, 
-                "file_name": record.file_name, 
-                "file_data": record.file_data,
-                "file_size": record.file_size, 
-                "building": record.building, 
-                "provider": record.provider, 
-                "label_color": record.label_color, 
-                "stored_at": record.stored_at.isoformat() if record.stored_at else None
+                "id": getattr(record, "id", None), 
+                "report_id": getattr(record, "report_id", None), 
+                "file_name": getattr(record, "file_name", None), 
+                "file_data": getattr(record, "file_data", None),
+                "file_size": getattr(record, "file_size", None), 
+                "building": getattr(record, "building", None), 
+                "provider": getattr(record, "provider", None), 
+                "label_color": getattr(record, "label_color", None), 
+                "stored_at": stored_at_raw.isoformat() if stored_at_raw else None
             }
         finally:
             self.Session.remove()
@@ -534,23 +583,25 @@ class Database:
         Returns:
             Optional[Dict[str, Any]]: PDF verilerini içeren sözlük veya bulunamazsa None.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            record = session.query(PdfFile).filter_by(report_id=report_id).first()
+            record: Optional[PdfFile] = session.query(PdfFile).filter_by(report_id=report_id).first()
             
-            if not record:
+            if record is None:
                 return None
                 
+            stored_at_raw: Any = getattr(record, "stored_at", None)
+            
             return {
-                "id": record.id, 
-                "report_id": record.report_id, 
-                "file_name": record.file_name, 
-                "file_data": record.file_data,
-                "file_size": record.file_size, 
-                "building": record.building, 
-                "provider": record.provider, 
-                "label_color": record.label_color, 
-                "stored_at": record.stored_at.isoformat() if record.stored_at else None
+                "id": getattr(record, "id", None), 
+                "report_id": getattr(record, "report_id", None), 
+                "file_name": getattr(record, "file_name", None), 
+                "file_data": getattr(record, "file_data", None),
+                "file_size": getattr(record, "file_size", None), 
+                "building": getattr(record, "building", None), 
+                "provider": getattr(record, "provider", None), 
+                "label_color": getattr(record, "label_color", None), 
+                "stored_at": stored_at_raw.isoformat() if stored_at_raw else None
             }
         finally:
             self.Session.remove()
@@ -564,23 +615,29 @@ class Database:
         Returns:
             List[Dict[str, Any]]: PDF meta verilerini içeren sözlük listesi.
         """
-        session: Any = self.Session()
+        session: Session = self.Session()
         try:
-            records = session.query(
+            records: List[Any] = session.query(
                 PdfFile.id, PdfFile.report_id, PdfFile.file_name, 
                 PdfFile.file_size, PdfFile.building, PdfFile.provider, 
                 PdfFile.label_color, PdfFile.stored_at
             ).order_by(PdfFile.stored_at.desc()).limit(limit).all()
             
-            return [
-                {
-                    "id": r.id, "report_id": r.report_id, "file_name": r.file_name, 
-                    "file_size": r.file_size, "building": r.building, 
-                    "provider": r.provider, "label_color": r.label_color, 
-                    "stored_at": r.stored_at.isoformat() if r.stored_at else None
-                }
-                for r in records
-            ]
+            results: List[Dict[str, Any]] = []
+            for r in records:
+                stored_at_raw: Any = getattr(r, "stored_at", None)
+                results.append({
+                    "id": getattr(r, "id", None),
+                    "report_id": getattr(r, "report_id", None),
+                    "file_name": getattr(r, "file_name", None),
+                    "file_size": getattr(r, "file_size", None),
+                    "building": getattr(r, "building", None),
+                    "provider": getattr(r, "provider", None),
+                    "label_color": getattr(r, "label_color", None),
+                    "stored_at": stored_at_raw.isoformat() if stored_at_raw else None
+                })
+                
+            return results
         finally:
             self.Session.remove()
 
@@ -596,15 +653,19 @@ class Database:
         """
         pdf: Optional[Dict[str, Any]] = self.get_pdf(pdf_id)
         
-        if not pdf:
+        if pdf is None:
             return None
             
         os.makedirs(dest_folder, exist_ok=True)
-        path: str = os.path.join(dest_folder, pdf["file_name"])
+        file_name_raw: Any = pdf.get("file_name", "exported.pdf")
+        file_name: str = str(file_name_raw)
+        path: str = os.path.join(dest_folder, file_name)
         
         try:
             with open(path, "wb") as f:
-                f.write(pdf["file_data"])
+                file_data: Any = pdf.get("file_data", b"")
+                if isinstance(file_data, bytes):
+                    f.write(file_data)
             return path
         except Exception as e:
             log.error(f"PDF dışa aktarma hatası: {e}")
