@@ -105,11 +105,20 @@ def _parse_asansor_kontrol(content: str) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
 
     tarih_m: Optional[re.Match[str]] = DATE_PATTERN_DMY.search(content)
+    
     if not tarih_m:
+        tarih_m = re.search(r"(\d{1,2})[\.\-/](\d{1,2})[\.\-/](\d{4})", content)
+        
+    if not tarih_m:
+        log.warning("Asansör Kontrol e-postasında geçerli bir tarih bulunamadı, işlem atlanıyor.")
         return results
         
-    tarih: str = f"{str(tarih_m.group(1))}.{str(tarih_m.group(2))}.{str(tarih_m.group(3))}"
-    lines: List[str] = content.splitlines()
+    tarih: str = f"{str(tarih_m.group(1)).zfill(2)}.{str(tarih_m.group(2)).zfill(2)}.{str(tarih_m.group(3))}"
+    
+    wrap_pattern: str = r'[\r\n]+\s*(KNT\b|KONT\b|MAH|CAD|SOK|SİT|BLOK|NO:?|BİNA|APT|APART)'
+    content_fixed: str = str(re.sub(wrap_pattern, r' \1', content, flags=re.IGNORECASE))
+    
+    lines: List[str] = content_fixed.splitlines()
     seen: Set[str] = set()
 
     idx: int = 1
@@ -119,7 +128,14 @@ def _parse_asansor_kontrol(content: str) -> List[Dict[str, Any]]:
         if not normalized:
             continue
 
-        if not ILCE_KNT_PATTERN.search(normalized):
+        is_match: bool = bool(ILCE_KNT_PATTERN.search(normalized))
+        if not is_match:
+            has_ilce: bool = bool(re.search(_ILCE_PAT, normalized, flags=re.IGNORECASE))
+            has_kid: bool = bool(KID_PATTERN_NUMERIC.search(normalized))
+            if has_ilce and has_kid:
+                is_match = True
+                
+        if not is_match:
             continue
 
         before_ilce: str = str(re.split(_ILCE_PAT, normalized, flags=re.IGNORECASE)[0])
@@ -163,7 +179,6 @@ def _parse_asansor_kontrol(content: str) -> List[Dict[str, Any]]:
         idx += 1
 
     return results
-
 
 def _parse_artibel(content: str) -> List[Dict[str, Any]]:
     """Artıbel firmasının randevu formatını ayrıştırır.
