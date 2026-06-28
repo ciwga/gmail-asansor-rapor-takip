@@ -1,7 +1,7 @@
 """Makina Mühendisleri Odası PDF raporları için ayrıştırıcı modülü."""
 
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, cast
 
 from app.parsers.base import BaseParser
 
@@ -10,13 +10,18 @@ class MmoParser(BaseParser):
     """Makina Mühendisleri Odası formatındaki asansör raporlarını ayrıştıran sınıf.
 
     Attributes:
-        provider_name (str): Sağlayıcı adı.
+        provider_name (str): Sağlayıcı adı (Örn: "MMO").
     """
 
     provider_name: str = "MMO"
 
     def _parse_decisions(self) -> None:
-        """PDF metninden muayene kararlarını ve kusur listesini ayıklar."""
+        """PDF metninden muayene kararlarını ve kusur listesini ayıklar.
+        
+        Metin içindeki belirli numaralandırma ve yıldız (* veya **) desenlerini 
+        kullanarak her bir muayene kararını bulur, kategorisine göre etiketler 
+        (K, S, M) ve sınıfın _decisions listesine kaydeder.
+        """
         self._decisions: List[Dict[str, str]] = []
         
         if not self._text:
@@ -49,12 +54,12 @@ class MmoParser(BaseParser):
         """PDF metninden bina adını ayıklar.
 
         Returns:
-            Optional[str]: Temizlenmiş bina adı veya bulunamazsa None.
+            Optional[str]: Temizlenmiş bina adı. Eğer eşleşme veya metin bulunamazsa None döner.
         """
         if not self._text:
             return None
 
-        anchor: Optional[re.Match] = re.search(
+        anchor: Optional[re.Match[str]] = re.search(
             r"ASANSÖRE\s*İLİŞKİN\s*BİLGİLER", self._text, re.IGNORECASE
         )
         
@@ -65,9 +70,9 @@ class MmoParser(BaseParser):
         search_area: str = self._text[start_index : start_index + 500]
         
         bp: str = self._building_pattern()
-        m: Optional[re.Match] = re.search(r"\b" + bp + r"\b", search_area, re.IGNORECASE)
+        m: Optional[re.Match[str]] = re.search(r"\b" + bp + r"\b", search_area, re.IGNORECASE)
         
         if m:
-            return self._clean_building_name(m.group(1))
+            return self._clean_building_name(cast(str, m.group(1)))
 
         return None

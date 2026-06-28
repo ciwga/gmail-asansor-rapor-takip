@@ -1,7 +1,7 @@
 """Optimal Denge Teknik Denetim A.Ş. PDF raporları için ayrıştırıcı modülü."""
 
 import re
-from typing import Optional, List, Dict, Set, Any, Match, Pattern
+from typing import Optional, List, Dict, Set, Match, Pattern, cast, Tuple
 
 from app.parsers.base import BaseParser
 
@@ -10,7 +10,7 @@ class OptimalDengeParser(BaseParser):
     """Optimal Denge formatındaki asansör periyodik kontrol raporlarını ayrıştırır.
 
     Attributes:
-        provider_name (str): Sağlayıcı kuruluş adı.
+        provider_name (str): Sağlayıcı kuruluş adı (Örn: "Optimal Denge").
     """
 
     provider_name: str = "Optimal Denge"
@@ -22,7 +22,7 @@ class OptimalDengeParser(BaseParser):
         if not self._text:
             return
 
-        inline_pattern: Pattern = re.compile(
+        inline_pattern: Pattern[str] = re.compile(
             r"(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s*\(([KMS])\)\s*(.*?)(?=\n\s*\d{1,2}\.\d{1,2}|$)",
             re.DOTALL | re.MULTILINE,
         )
@@ -32,6 +32,7 @@ class OptimalDengeParser(BaseParser):
         code: str
         cat: str
         content: str
+        
         for code, cat, content in inline_pattern.findall(self._text):
             clean_content: str = re.sub(r"\s+", " ", content).strip()
             clean_content = re.sub(r"Sayfa \d+\s*/\s*\d+", "", clean_content).strip()
@@ -44,7 +45,7 @@ class OptimalDengeParser(BaseParser):
                 })
 
         if not self._decisions:
-            pattern2: Pattern = re.compile(
+            pattern2: Pattern[str] = re.compile(
                 r"\(([KMS])\)\s*(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s+(.*?)"
                 r"(?=\n\s*(?:\([KMS]\)|\d{1,2}\.\d{1,2})|Total|Toplam|$)",
                 re.DOTALL | re.MULTILINE,
@@ -61,9 +62,9 @@ class OptimalDengeParser(BaseParser):
     @property
     def label_color(self) -> str:
         """Ayıklanan kusurların ciddiyetine göre rapor etiket rengini belirler.
-
+        
         Returns:
-            str: Belirlenen etiket rengi.
+            str: Belirlenen etiket rengi ("Kırmızı", "Sarı", "Mavi" veya "Etiket Bulunamadı").
         """
         if not self._decisions:
             return "Etiket Bulunamadı"
@@ -88,7 +89,7 @@ class OptimalDengeParser(BaseParser):
         if not self._text:
             return None
 
-        match: Optional[Match] = re.search(
+        match: Optional[Match[str]] = re.search(
             r"ADRES:\s*(.*?)(?=\n|ADA[\u2010\u2013\- ]PARSEL|BİNA SORUMLUSU|$)",
             self._text, re.IGNORECASE | re.DOTALL,
         )
@@ -96,9 +97,9 @@ class OptimalDengeParser(BaseParser):
         if not match:
             return None
 
-        full_address: str = re.sub(r"\s+", " ", match.group(1).strip())
+        full_address: str = re.sub(r"\s+", " ", cast(str, match.group(1)).strip())
 
-        suffix_match: Optional[Match] = re.search(
+        suffix_match: Optional[Match[str]] = re.search(
             r"^(.*?(?:\b(?:APARTMANI|SİTESİ|KONUTLARI|EVLERİ|LOJMANLARI|MERKEZİ|"
             r"İŞ HANI|HANI|PLAZA|REZİDANS|PALAS|OKULU|HASTANESİ|KOLEJİ)\b"
             r"|\bAPT\.?(?=\s|$)))",
@@ -108,9 +109,9 @@ class OptimalDengeParser(BaseParser):
         raw_name: str = ""
         
         if suffix_match:
-            raw_name = suffix_match.group(1).strip()
+            raw_name = cast(str, suffix_match.group(1)).strip()
         else:
-            separator_match: Optional[Match] = re.search(
+            separator_match: Optional[Match[str]] = re.search(
                 r"\sMAH\b|\sMAHALLESİ|\sCAD\b|\sCD\b|\sSOK\b|\sSK\b|\sNO\b|\sNO:",
                 full_address, re.IGNORECASE,
             )
@@ -124,42 +125,44 @@ class OptimalDengeParser(BaseParser):
         """Asansör kimlik numarasını ayıklar.
 
         Returns:
-            Optional[str]: Temizlenmiş numara veya None.
+            Optional[str]: Temizlenmiş numara formatı (örn: 1234567/12) veya bulunamazsa
+                           üst sınıftan (BaseParser) dönen değer veya None.
         """
         if not self._text:
             return None
 
-        match: Optional[Match] = re.search(
+        match: Optional[Match[str]] = re.search(
             r"KİMLİK\s*NUMARASI\s*\n*\s*(\d{7,12})\s*([/\-\u2010\u2013])\s*(\d{1,2})",
             self._text, re.IGNORECASE | re.DOTALL,
         )
         
         if match:
-            return f"{match.group(1)}/{match.group(3)}"
+            return f"{cast(str, match.group(1))}/{cast(str, match.group(3))}"
 
-        match2: Optional[Match] = re.search(r"(\d{7,12})\s*[\u2010\u2013]\s*(\d{1,2})", self._text)
+        match2: Optional[Match[str]] = re.search(r"(\d{7,12})\s*[\u2010\u2013]\s*(\d{1,2})", self._text)
         
         if match2:
-            return f"{match2.group(1)}/{match2.group(2)}"
+            return f"{cast(str, match2.group(1))}/{cast(str, match2.group(2))}"
 
         return super().extract_elevator_number()
 
     def extract_uuid(self) -> Optional[str]:
-        """Rapor benzersiz kimlik bilgisini ayıklar.
+        """Rapor benzersiz kimlik bilgisini (UUID) ayıklar.
 
         Returns:
-            Optional[str]: Standart tireli benzersiz kimlik veya bulunamazsa None.
+            Optional[str]: Standart tireli benzersiz kimlik (UUID) veya bulunamazsa 
+                           üst sınıftan (BaseParser) dönen değer.
         """
         if not self._text:
             return None
             
-        uuid_match: Optional[Match] = re.search(
+        uuid_match: Optional[Match[str]] = re.search(
             r"([0-9a-fA-F]{8})[\-\u2010\u2013]([0-9a-fA-F]{4})[\-\u2010\u2013]([0-9a-fA-F]{4})[\-\u2010\u2013]([0-9a-fA-F]{4})[\-\u2010\u2013]([0-9a-fA-F]{12})",
             self._text,
         )
         
         if uuid_match:
-            return "-".join(uuid_match.groups())
+            return "-".join(cast(Tuple[str, ...], uuid_match.groups()))
             
         return super().extract_uuid()
 
@@ -167,21 +170,29 @@ class OptimalDengeParser(BaseParser):
         """Rapor içerisinden muayene tarihini ayıklar.
 
         Returns:
-            Optional[str]: Formatlanmış tarih veya None.
+            Optional[str]: Formatlanmış tarih veya bulunamazsa üst sınıftan 
+                           (BaseParser) dönen değer.
         """
         if not self._text:
             return None
 
-        def format_date(match_obj: Match) -> str:
-            """Tarih dizgisini standart formata getirir."""
-            raw_date: str = match_obj.group(1).replace(".", "/")
+        def format_date(match_obj: Match[str]) -> str:
+            """Tarih dizgisini standart formata (gg/aa/yyyy) getirir.
+            
+            Args:
+                match_obj (Match[str]): Regex eşleşme objesi.
+                
+            Returns:
+                str: Sıfırlarla doldurulmuş ve bölü (/) ile ayrılmış tarih.
+            """
+            raw_date: str = cast(str, match_obj.group(1)).replace(".", "/")
             parts: List[str] = raw_date.split("/")
             
             if len(parts) == 3:
                 return f"{parts[0].zfill(2)}/{parts[1].zfill(2)}/{parts[2]}"
             return raw_date
 
-        follow_up_match: Optional[Match] = re.search(
+        follow_up_match: Optional[Match[str]] = re.search(
             r"TAK[İI]P\s*KONTROL[ÜU]\s*TAR[İI]H[İI]\s*:?\s*\n*\s*(\d{1,2}[./]\d{1,2}[./]\d{4})", 
             self._text, re.IGNORECASE
         )
@@ -196,7 +207,7 @@ class OptimalDengeParser(BaseParser):
         
         pattern: str
         for pattern in date_patterns:
-            inspection_match: Optional[Match] = re.search(pattern, self._text, re.IGNORECASE)
+            inspection_match: Optional[Match[str]] = re.search(pattern, self._text, re.IGNORECASE)
             
             if inspection_match:
                 return format_date(inspection_match)

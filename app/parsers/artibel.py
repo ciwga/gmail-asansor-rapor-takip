@@ -1,7 +1,7 @@
 """Artibel Belgelendirme PDF raporları için ayrıştırıcı modülü."""
 
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, cast
 
 from app.parsers.base import BaseParser
 
@@ -20,12 +20,14 @@ class ArtibelParser(BaseParser):
         self._decisions: List[Dict[str, str]] = []
 
         pattern: str = r"\(([KSM])\)\s+[\d.]+\s+(.*?)(?=\s*\([KSM]\)|$)"
-        m: re.Match
+        
+        m: re.Match[str]
         for m in re.finditer(pattern, self._text, re.DOTALL | re.IGNORECASE):
-            if "REPORT" not in m.group(2).upper():
-                content: str = re.sub(r"\s*\d+\s*-.*$", "", m.group(2).strip(), flags=re.DOTALL)
+            if "REPORT" not in cast(str, m.group(2)).upper():
+                content: str = re.sub(r"\s*\d+\s*-.*$", "", cast(str, m.group(2)).strip(), flags=re.DOTALL)
+                
                 self._decisions.append({
-                    "category": m.group(1).upper(),
+                    "category": cast(str, m.group(1)).upper(),
                     "content": content.strip(),
                 })
 
@@ -44,15 +46,16 @@ class ArtibelParser(BaseParser):
         """Raporun muayene tarihini ayıklar.
 
         Returns:
-            Optional[str]: Bulunan tarih veya bulunamazsa None.
+            Optional[str]: Bulunan tarih (gg.aa.yyyy veya gg/aa/yyyy). 
+                           Bulunamazsa üst sınıfın standart metodundan dönecek değer veya None.
         """
         if self._text:
-            m: Optional[re.Match] = re.search(
+            m: Optional[re.Match[str]] = re.search(
                 r"[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\s+(\d{2}[./]\d{2}[./]\d{4})",
                 self._text, re.IGNORECASE,
             )
             if m:
-                return m.group(1).strip()
+                return cast(str, m.group(1)).strip()
         
         return super().extract_inspection_date()
 
@@ -60,26 +63,26 @@ class ArtibelParser(BaseParser):
         """Rapor metninden bina adını ayıklar.
 
         Returns:
-            Optional[str]: Temizlenmiş bina adı veya bulunamazsa None.
+            Optional[str]: Temizlenmiş bina adı. Veri bulunamazsa None döner.
         """
         if not self._text:
             return None
 
-        m: Optional[re.Match] = re.search(r"-\s*(?P<name>[^-]+?)\s*-\s*Tesis", self._text, re.IGNORECASE)
-        if m:
-            return self._clean_building_name(m.group("name"))
+        m: Optional[re.Match[str]] = re.search(r"-\s*(?P<name>[^-]+?)\s*-\s*Tesis", self._text, re.IGNORECASE)
 
-        section_match: Optional[re.Match] = re.search(
+        if m:
+            return self._clean_building_name(cast(str, m.group("name")))
+
+        section_match: Optional[re.Match[str]] = re.search(
             r"BİNA\s*SORUMLUSUNA\s*İLİŞKİN\s*BİLGİLER(.*?)(?:YETKİLİ|SERVİSE)",
             self._text, re.DOTALL | re.IGNORECASE,
         )
         
-        area: str = section_match.group(1) if section_match else self._text
-        
+        area: str = cast(str, section_match.group(1)) if section_match else self._text
         bp: str = self._building_pattern()
-        g: Optional[re.Match] = re.search(r"\b" + bp + r"\b", area, re.IGNORECASE)
+        g: Optional[re.Match[str]] = re.search(r"\b" + bp + r"\b", area, re.IGNORECASE)
         
         if g:
-            return self._clean_building_name(g.group(1))
+            return self._clean_building_name(cast(str, g.group(1)))
 
         return None
