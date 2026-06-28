@@ -2,9 +2,9 @@
 
 import re
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Set, Any, Tuple
+from typing import Optional, List, Dict, Set, Match
 
-from app.utils.text import BUILDING_SUFFIXES
+from app.utils.text import BUILDING_FULL_PATTERN
 
 
 class BaseParser(ABC):
@@ -71,6 +71,7 @@ class BaseParser(ABC):
         """
         clean_text: str = self._text
         uuid_pattern: str = r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+        
         clean_text = re.sub(uuid_pattern, "", clean_text)
         
         matches: List[str] = re.findall(r"\b\d{7,12}\s*[/-]\s*\d{1,2}\b", clean_text)
@@ -101,7 +102,7 @@ class BaseParser(ABC):
         ]
         
         p: str
-        m: Optional[re.Match]
+        m: Optional[Match[str]]
         for p in patterns:
             m = re.search(p, self._text, re.IGNORECASE)
             if m:
@@ -109,54 +110,57 @@ class BaseParser(ABC):
                 
         return None
 
-    def _clean_building_name(self, raw: str) -> Optional[str]:
-        """Bina adındaki gürültü verileri temizler.
+    def _clean_building_name(self, raw_name: str) -> str:
+        """Ham bina adını temizler ve standartlaştırır.
+        
+        Tüm extractor'lar tarafından paylaşılan ortak temizleme mantığı:
+        1. Başta gelen ID numaralarını (xxxxx/x) temizler.
+        2. " / " sonrası blok bilgilerini temizler.
+        3. Sondaki BLOK/NO detaylarını temizler.
+        4. APT -> APARTMANI vb. standartlaştırma yapar.
         
         Args:
-            raw (str): Ham metinden ayıklanan bina adı.
+            raw_name (str): Regex ile yakalanan ham bina veya kurum adı.
             
         Returns:
-            Optional[str]: Standartlaştırılmış ve temizlenmiş bina adı veya None.
+            str: Temizlenmiş ve büyük harfe dönüştürülmüş bina adı veya hatalıysa boş string.
         """
-        if not raw:
-            return None
-            
-        name: str = raw.strip()
-        name = re.sub(r"^\d+\s*[/-]\s*\d+\s+", "", name)
+        if not raw_name:
+            return ""
         
-        if " / " in name:
-            name = name.split(" / ")[0].strip()
-            
-        if len(name) > 8:
-            name = re.sub(r"\s+\d+\.?\s*BLOK$", "", name, flags=re.IGNORECASE)
-            name = re.sub(r"\s+[A-Z]\s*BLOK$", "", name, flags=re.IGNORECASE)
-            name = re.sub(r"\s+(?:NO|KAPI NO|DAİRE)[:.]\s*\d+.*$", "", name, flags=re.IGNORECASE)
-            
-        replacements: List[Tuple[str, str]] = [
-            (r"APT\.?", "APARTMANI"), 
-            (r"\bAPARTMAN\b", "APARTMANI"),
-            (r"KONUTLAR$", "KONUTLARI"), 
-            (r"SİTE$", "SİTESİ"),
-            (r"EVLER$", "EVLERİ"), 
-            (r"LOJ\.", "LOJMANLARI")
-        ]
+        cleaned: str = raw_name.strip()
         
-        pat: str
-        rep: str
-        for pat, rep in replacements:
-            name = re.sub(pat, rep, name, flags=re.IGNORECASE)
-            
-        name = name.strip(" /-.\\")
+        cleaned = re.sub(r'^\d+\s*[\/-]\s*\d+\s+', '', cleaned)
         
-        if 3 < len(name) < 60:
-            return name.upper()
-            
-        return None
+        if " / " in cleaned:
+            parts: List[str] = cleaned.split(" / ")
+            cleaned = parts[0].strip()
+        
+        if len(cleaned) > 8:
+            cleaned = re.sub(r'\s+\d+\.?\s*BLOK$', '', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'\s+[A-Z]\s*BLOK$', '', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'\s+(?:NO|KAPI NO|DAİRE)[:\.]?\s*\d+.*$', '', cleaned, flags=re.IGNORECASE)
+        
+        cleaned = re.sub(r"APT\.?", "APARTMANI", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\bAPARTMAN\b", "APARTMANI", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"KONUTLAR$", "KONUTLARI", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"SİTE$", "SİTESİ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"EVLER$", "EVLERİ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"LOJ\.", "LOJMANLARI", cleaned, flags=re.IGNORECASE)
+        
+        cleaned = re.sub(r"İNŞ\.\s*$", "İNŞ.", cleaned, flags=re.IGNORECASE)
+        
+        cleaned = cleaned.strip(" /-.\\")
+        
+        if 3 < len(cleaned) < 150:
+            return cleaned.upper()
+        
+        return ""
 
     def _building_pattern(self) -> str:
-        """Bina adını yakalamak için son ekleri kullanan dinamik düzenli ifade.
+        """Bina adını yakalamak için son ekleri ve zincir yapısını kullanan dinamik düzenli ifade.
         
         Returns:
-            str: Bina adını tespit etmek için kullanılan düzenli ifade örüntüsü.
+            str: Zincirleme kurum/bina adını tespit etmek için kullanılan düzenli ifade örüntüsü.
         """
-        return rf"([A-ZĞÜŞİÖÇ0-9][A-ZĞÜŞİÖÇ0-9.\-/ \t]{{0,50}}?(?:{BUILDING_SUFFIXES}))"
+        return BUILDING_FULL_PATTERN

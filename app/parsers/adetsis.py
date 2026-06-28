@@ -1,7 +1,7 @@
 """Kent Grup ve Asansör Kontrol PDF raporları için ayrıştırıcı modülü."""
 
 import re
-from typing import Optional, List, Dict, Set, Any
+from typing import Optional, List, Dict, Set, Pattern, Match
 
 from app.parsers.base import BaseParser
 
@@ -88,6 +88,9 @@ class AdetsisParser(BaseParser):
 
     def extract_building_name(self) -> Optional[str]:
         """PDF metni içerisinden bina adını ayıklar.
+        
+        Adres çıkarımı için pdf_base_extractor içerisindeki gelişmiş mantık referans alınmıştır.
+        Bu strateji ID'lerin ve Blok bilgisinin güvenli bir şekilde metinden sıyrılmasını sağlar.
 
         Returns:
             Optional[str]: Temizlenmiş ve standartlaştırılmış bina adı veya None.
@@ -97,23 +100,30 @@ class AdetsisParser(BaseParser):
 
         bp: str = self._building_pattern()
 
-        p_match: Optional[re.Match] = re.search(
-            r"\(\s*(?:\([^)]+\)\s*)?(?P<bina>" + bp + r").*?\)",
-            self._text, re.IGNORECASE | re.DOTALL,
+        addr_regex: Pattern[str] = re.compile(
+            r'\(\s*'
+            r'(?:\([^)]+\)\s*)?'           # Opsiyonel iç parantez: (xxxxx/xx)
+            r'(?:\d+\s*/\s*\d+\s+)?'       # Opsiyonel düz ID: xxxxx/x
+            r'(?P<bina_adi>' + bp + r')'
+            r'\s*(?:/[^)]*)?'              # Opsiyonel blok bilgisi
+            r'\s*\)',
+            re.IGNORECASE
         )
         
-        g_match: Optional[re.Match] = re.search(r"\b" + bp + r"\b", self._text, re.IGNORECASE)
+        m: Optional[Match[str]] = addr_regex.search(self._text)
+        raw_name: str = ""
 
-        raw: str = p_match.group("bina") if p_match else (g_match.group(1) if g_match else "")
-        
-        if raw:
-            cleaned: str = raw.strip()
-            cleaned = re.sub(r"^\d+\s*[/-]\s*\d+\s+", "", cleaned)
-            
-            if " / " in cleaned:
-                cleaned = cleaned.split(" / ")[0].strip()
-                
-            if 3 < len(cleaned) < 60:
-                return cleaned.upper()
+        if m:
+            raw_name = m.group("bina_adi")
+        else:
+            general_regex: Pattern[str] = re.compile(r'\b' + bp + r'\b', re.IGNORECASE)
+            gm: Optional[Match[str]] = general_regex.search(self._text)
+            if gm:
+                raw_name = gm.group(1)
+
+        if raw_name:
+            cleaned: str = self._clean_building_name(raw_name)
+            if cleaned:
+                return cleaned
 
         return None
