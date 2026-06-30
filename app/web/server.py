@@ -244,64 +244,93 @@ def create_app() -> Tuple[Flask, SocketIO]:
 
         def _bg_watch() -> None:
             """Dinleme modunun kendi iş parçacığında çalışan ana döngüsü."""
-            global _watch_running
+            global _watch_running, _running, _run_id, _progress, _last_error
             try:
                 from app.core.engine import run, _watch_stop  # pyright: ignore[reportPrivateUsage]
                 _watch_stop.clear()  # pyright: ignore[reportPrivateUsage]
-                
-                bg_config: Dict[str, Any] = load_config()
-                ws_raw: Any = bg_config.get("watch_settings", {})
-                interval: int = 30
-                
-                if isinstance(ws_raw, dict):
-                    ws_map: Dict[str, Any] = cast(Dict[str, Any], ws_raw)
-                    interval_raw: Any = ws_map.get("interval_minutes", 30)
-                    if isinstance(interval_raw, int):
-                        interval = interval_raw
-                        
-                interval = max(1, interval)
-                
-                log.info("=" * 50)
-                log.info(f"👁️  DİNLEME MODU — Her {interval} dakikada bir kontrol yapılacak")
-                log.info("=" * 50)
                 
                 cycle: int = 0
                 
                 while not _watch_stop.is_set():  # pyright: ignore[reportPrivateUsage]
                     cycle += 1
+                    
+                    bg_config: Dict[str, Any] = load_config()
+                    ws_raw: Any = bg_config.get("watch_settings", {})
+                    interval: int = 30
+                    
+                    if isinstance(ws_raw, dict):
+                        ws_map: Dict[str, Any] = cast(Dict[str, Any], ws_raw)
+                        interval_raw: Any = ws_map.get("interval_minutes", 30)
+                        try:
+                            interval = int(interval_raw)
+                        except (ValueError, TypeError):
+                            pass
+                            
+                    interval = max(1, interval)
+                    
+                    if cycle == 1:
+                        log.info("=" * 50)
+                        log.info(f"👁️  DİNLEME MODU — Her {interval} dakikada bir kontrol yapılacak")
+                        log.info("=" * 50)
+                    
                     log.info(f"🔄 Döngü #{cycle} başlıyor...")
-                    try:
-                        results: List[Dict[str, Any]] = run()
-                        
-                        if results:
+                    
+                    # Eşzamanlı başlatmaları engellemek için kontrol
+                    can_run = False
+                    with _lock:
+                        if not _running:
+                            _running = True
+                            _run_id += 1
+                            _progress = {"total": 0, "done": 0, "phase": f"İzleme (Döngü {cycle}) başlatılıyor..."}
+                            _last_error = ""
+                            can_run = True
+                    
+                    if not can_run:
+                        log.info(f"🔄 Döngü #{cycle} atlandı: Halihazırda manuel bir tarama işlemi devam ediyor.")
+                    else:
+                        try:
+                            socketio.emit("watch_cycle_started", {"cycle": cycle}, namespace="/logs")  # pyright: ignore[reportUnknownMemberType]
+                            
+                            results: List[Dict[str, Any]] = run()
+                            
+                            if results:
+                                with _lock:
+                                    stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
+                                    stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+                                    
+                                    existing_results_raw: Any = stored_data_safe.get("data", [])
+                                    existing_results: List[Dict[str, Any]] = []
+                                    
+                                    if isinstance(existing_results_raw, list):
+                                        raw_list: List[Any] = cast(List[Any], existing_results_raw)
+                                        for item in raw_list:
+                                            if isinstance(item, dict):
+                                                item_map: Dict[str, Any] = cast(Dict[str, Any], item)
+                                                existing_results.append(item_map)
+                                    
+                                    existing_map: Dict[str, Dict[str, Any]] = {_get_unique_key(r): r for r in existing_results}
+                                    for r in results:
+                                        existing_map[_get_unique_key(r)] = r
+                                    
+                                    updated_list: List[Dict[str, Any]] = list(existing_map.values())
+                                    set_task_result("web_last_results", {"data": updated_list})
+                                
+                                socketio.emit("results_updated", namespace="/logs")  # pyright: ignore[reportUnknownMemberType]
+                                log.info(f"🔄 Döngü #{cycle} tamamlandı: {len(results)} yeni rapor eklendi.")
+                            else:
+                                log.info(f"🔄 Döngü #{cycle} tamamlandı: Yeni rapor bulunamadı.")
+                                
                             with _lock:
-                                stored_data: Optional[Dict[str, Any]] = get_task_result("web_last_results")
-                                stored_data_safe: Dict[str, Any] = stored_data if stored_data else {}
+                                _progress["phase"] = "İzleme tamamlandı"
                                 
-                                existing_results_raw: Any = stored_data_safe.get("data", [])
-                                existing_results: List[Dict[str, Any]] = []
-                                
-                                if isinstance(existing_results_raw, list):
-                                    raw_list: List[Any] = cast(List[Any], existing_results_raw)
-                                    for item in raw_list:
-                                        if isinstance(item, dict):
-                                            item_map: Dict[str, Any] = cast(Dict[str, Any], item)
-                                            existing_results.append(item_map)
-                                
-                                existing_map: Dict[str, Dict[str, Any]] = {_get_unique_key(r): r for r in existing_results}
-                                for r in results:
-                                    existing_map[_get_unique_key(r)] = r
-                                
-                                updated_list: List[Dict[str, Any]] = list(existing_map.values())
-                                set_task_result("web_last_results", {"data": updated_list})
-                            
-                            socketio.emit("results_updated", namespace="/logs")  # pyright: ignore[reportUnknownMemberType]
-                            log.info(f"🔄 Döngü #{cycle} tamamlandı: {len(results)} yeni rapor eklendi.")
-                        else:
-                            log.info(f"🔄 Döngü #{cycle} tamamlandı: Yeni rapor bulunamadı.")
-                            
-                    except Exception as e:
-                        log.error(f"🔄 Döngü #{cycle} hatası: {e}", exc_info=True)
+                        except Exception as e:
+                            log.error(f"🔄 Döngü #{cycle} hatası: {e}", exc_info=True)
+                            with _lock:
+                                _last_error = str(e)
+                                _progress["phase"] = "Hata oluştu"
+                        finally:
+                            with _lock:
+                                _running = False
 
                     log.info(f"⏳ {interval} dakika bekleniyor...")
                     if _watch_stop.wait(timeout=interval * 60):  # pyright: ignore[reportPrivateUsage]

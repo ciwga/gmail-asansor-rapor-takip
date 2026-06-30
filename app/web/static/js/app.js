@@ -139,6 +139,13 @@ function initSocket() {
     console.log('[DEBUG] Arka planda yeni veriler bulundu, arayüz güncelleniyor...');
     loadResults();
   });
+    
+  socket.on('watch_cycle_started', function(data) {
+    console.log('[DEBUG] İzleme döngüsü başladı:', data);
+    if (!_isRunning) {
+      checkStatus();
+    }
+  });
 
   socket.on('auth_required', (d) => {
     showAuthModal(d.url);
@@ -235,7 +242,10 @@ function _doPoll() {
           if (p && p.total > 0) {
             const pct = Math.min(95, 10 + Math.round((p.done / p.total) * 85));
             showProgress(pct);
-            setStatus('running', 'İşleniyor... ' + p.done + '/' + p.total + ' (%' + pct + ')');
+            setStatus('running', p.phase || ('İşleniyor... ' + p.done + '/' + p.total + ' (%' + pct + ')'));
+          } else if (p && p.phase) {
+            showProgress(50);
+            setStatus('running', p.phase);
           } else {
             setStatus('running', 'Çalışıyor...');
           }
@@ -474,7 +484,7 @@ function updateWatchUI(active) {
     btn.style.background = 'var(--red)';
     btn.style.borderColor = 'var(--red)';
     btn.style.color = '#fff';
-    st.textContent = 'Aktif';
+    st.textContent = 'Aktif (Arka planda tarama yapıyor)';
   } else {
     btn.textContent = '▶ Dinlemeyi Başlat';
     btn.style.background = '';

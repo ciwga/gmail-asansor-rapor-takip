@@ -302,8 +302,11 @@ def _run_gmail(config: Dict[str, Any], db: Database, mmo_ids: Set[Tuple[str, str
                 days_val: Any = days_map.get(label)
                 if not days_val and ("Randevu" in label or "Appointment" in label):
                     days_val = appt_cfg.get("randevu_search_days", 60)
+
+                if not days_val:
+                    days_val = int(search_cfg.get("search_days_before_today", 0))
                     
-                if days_val and isinstance(days_val, int):
+                if days_val and isinstance(days_val, int) and days_val > 0:
                     cutoff: datetime = datetime.now() - timedelta(days=days_val)
                     q += f' after:{cutoff.strftime("%Y/%m/%d")}'
                 
