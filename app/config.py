@@ -76,7 +76,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "search_settings": {
         "search_by_label": False,
-        "target_labels": [],
+        "target_labels": ["Kırmızı Etiketli", "Sarı Etiketli", "Randevu"],
         "search_only_unread": True,
         "mark_as_read_after_processing": True,
         "archive_after_processing": False,

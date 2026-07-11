@@ -993,6 +993,38 @@ function clearDatabase() {
 }
 
 /**
+ * Kullanıcının özel yapılandırma ayarlarını fabrika ayarlarına sıfırlar.
+ * @returns {void}
+ */
+function resetConfigToDefault() {
+  if (!confirm('DİKKAT: Tüm özel ayarlarınız (klasör yolları, etiket isimleri, gelişmiş seçenekler) silinecek ve fabrika ayarlarına dönülecek!\n\n(Geçmiş e-posta kayıtlarınız ve Google yetkilendirmeniz bu işlemden etkilenmez.)\n\nOnaylıyor musunuz?')) {
+    return;
+  }
+  
+  // Otomatik kaydetme işlemi sıfırlamayla çakışmasın diye zamanlayıcıyı iptal ediyoruz.
+  if (_autoSaveTimer) {
+    clearTimeout(_autoSaveTimer);
+  }
+  
+  // Sunucuya boş bir nesne göndererek varsayılanların tetiklenmesini sağlıyoruz.
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'saved') {
+        alert('Ayarlar başarıyla fabrika ayarlarına sıfırlandı. Değişikliklerin uygulanması için sayfa yenilenecek.');
+        window.location.reload();
+      } else {
+        alert('Hata: ' + (d.error || 'Sıfırlama sırasında bir hata oluştu.'));
+      }
+    })
+    .catch(e => alert('Bağlantı hatası: ' + e));
+}
+
+/**
  * Arayüze yeni bir e-posta kaynağı satırı ekler.
  * @param {string} label 
  * @param {string} query 
@@ -1252,14 +1284,14 @@ function loadConfig() {
       
       const df = s.date_range_filter || {};
       C('cfg_date_filter_enabled', df.enabled);
-      V('cfg_date_start', df.start_date || '');
-      V('cfg_date_end', df.end_date || '');
+      V('cfg_date_start', df.start_date ?? '');
+      V('cfg_date_end', df.end_date ?? '');
 
       // Randevu UI
       C('cfg_appt_enabled', a.enabled !== false);
       C('cfg_appt_past', a.filter_past_dates !== false);
       C('cfg_appt_unread', !!a.search_only_unread);
-      V('cfg_appt_days', a.randevu_search_days || 60);
+      V('cfg_appt_days', a.randevu_search_days ?? 60);
 
       // Çıktı Formatları UI
       C('cfg_fmt_txt', (c.output_formats || []).includes('txt'));
@@ -1267,44 +1299,47 @@ function loadConfig() {
       C('cfg_fmt_wa', (c.output_formats || []).includes('whatsapp'));
 
       // Gelişmiş Ayarlar UI
-      V('cfg_mode', c.mode || 'gmail');
-      V('cfg_web_host', w.host || '127.0.0.1');
-      V('cfg_web_port', w.port || 5001);
+      V('cfg_mode', c.mode ?? 'gmail');
+      V('cfg_web_host', w.host ?? '127.0.0.1');
+      V('cfg_web_port', w.port ?? 5001);
       
       const wt = c.watch_settings || {}; 
-      V('cfg_watch_interval', wt.interval_minutes || 30);
+      V('cfg_watch_interval', wt.interval_minutes ?? 30);
       
       const ls = c.label_settings || {}; 
       const cols = ls.colors || {};
       
       C('cfg_label_tree', ls.use_tree); 
-      V('cfg_label_parent', ls.tree_parent || '');
-      V('cfg_lbl_red', cols['Kırmızı'] || 'Kırmızı Etiketli'); 
-      V('cfg_lbl_yellow', cols['Sarı'] || 'Sarı Etiketli');
-      V('cfg_lbl_blue', cols['Mavi'] || 'Mavi Etiketli'); 
-      V('cfg_lbl_green', cols['Yeşil'] || 'Yeşil Etiketli');
-      V('cfg_lbl_appt', ls.appointment_label || 'Randevu');
+      V('cfg_label_parent', ls.tree_parent ?? '');
+      V('cfg_lbl_red', cols['Kırmızı'] ?? 'Kırmızı Etiketli'); 
+      V('cfg_lbl_yellow', cols['Sarı'] ?? 'Sarı Etiketli');
+      V('cfg_lbl_blue', cols['Mavi'] ?? 'Mavi Etiketli'); 
+      V('cfg_lbl_green', cols['Yeşil'] ?? 'Yeşil Etiketli');
+      V('cfg_lbl_appt', ls.appointment_label ?? 'Randevu');
       
-      V('cfg_path_dl', p.download_folder || '');
-      V('cfg_path_output', p.output_folder || '');
-      V('cfg_path_db', p.database || '');
-      V('cfg_path_log', p.log_file || '');
+      V('cfg_path_dl', p.download_folder ?? '');
+      V('cfg_path_output', p.output_folder ?? '');
+      V('cfg_path_db', p.database ?? '');
+      V('cfg_path_log', p.log_file ?? '');
       
-      V('cfg_workers', s.num_workers || 10);
-      V('cfg_search_days', s.search_days_before_today || 0);
-      V('cfg_target_labels', (s.target_labels || []).join(', '));
+      V('cfg_workers', s.num_workers ?? 10);
+      V('cfg_search_days', s.search_days_before_today ?? 0);
+      
+      const defaultTargetLabels = 'Kırmızı Etiketli, Sarı Etiketli, Randevu';
+      V('cfg_target_labels', s.target_labels != null ? s.target_labels.join(', ') : defaultTargetLabels);
+      
       V('cfg_ex_keywords', (s.exceptional_keywords || []).join(', '));
       V('cfg_ex_senders', (s.exceptional_senders || []).join(', '));
       
       const dy = s.label_specific_days_before || {};
-      V('cfg_days_red', dy['Kırmızı Etiketli'] || 60);
-      V('cfg_days_yellow', dy['Sarı Etiketli'] || 120);
+      V('cfg_days_red', dy['Kırmızı Etiketli'] ?? 60);
+      V('cfg_days_yellow', dy['Sarı Etiketli'] ?? 120);
       
       loadSources(c.sources);
       
       C('cfg_manual_enabled', m.enabled);
-      V('cfg_manual_path', m.folder_path || '');
-      V('cfg_manual_proc', m.processed_folder_path || '');
+      V('cfg_manual_path', m.folder_path ?? '');
+      V('cfg_manual_proc', m.processed_folder_path ?? '');
       
       C('cfg_force_reprocess', (c.database_settings || {}).force_reprocess_all);
       C('cfg_skip_dup', (c.database_settings || {}).skip_duplicate_downloads !== false);
@@ -1378,21 +1413,24 @@ function saveConfigForm() {
   
   if (!c.web_settings) c.web_settings = {};
   c.web_settings.host = G('cfg_web_host');
-  c.web_settings.port = parseInt(G('cfg_web_port')) || 5001;
+  
+  const parsedPort = parseInt(G('cfg_web_port'));
+  c.web_settings.port = isNaN(parsedPort) ? 5001 : parsedPort;
   
   if (!c.watch_settings) c.watch_settings = {};
-  c.watch_settings.interval_minutes = parseInt(G('cfg_watch_interval')) || 30;
+  const parsedWatchInterval = parseInt(G('cfg_watch_interval'));
+  c.watch_settings.interval_minutes = isNaN(parsedWatchInterval) ? 30 : parsedWatchInterval;
   
   if (!c.label_settings) c.label_settings = {};
   c.label_settings.use_tree = B('cfg_label_tree');
   c.label_settings.tree_parent = G('cfg_label_parent');
   c.label_settings.colors = {
-    'Kırmızı': G('cfg_lbl_red') || 'Kırmızı Etiketli',
-    'Sarı': G('cfg_lbl_yellow') || 'Sarı Etiketli',
-    'Mavi': G('cfg_lbl_blue') || 'Mavi Etiketli',
-    'Yeşil': G('cfg_lbl_green') || 'Yeşil Etiketli'
+    'Kırmızı': G('cfg_lbl_red'),
+    'Sarı': G('cfg_lbl_yellow'),
+    'Mavi': G('cfg_lbl_blue'),
+    'Yeşil': G('cfg_lbl_green')
   };
-  c.label_settings.appointment_label = G('cfg_lbl_appt') || 'Randevu';
+  c.label_settings.appointment_label = G('cfg_lbl_appt');
   
   c.color_labels = Object.values(c.label_settings.colors).concat([c.label_settings.appointment_label]);
   
@@ -1410,8 +1448,12 @@ function saveConfigForm() {
   c.search_settings.search_only_unread = B('cfg_only_unread');
   c.search_settings.mark_as_read_after_processing = B('cfg_mark_read');
   c.search_settings.archive_after_processing = B('cfg_archive');
-  c.search_settings.num_workers = parseInt(G('cfg_workers')) || 10;
-  c.search_settings.search_days_before_today = parseInt(G('cfg_search_days')) || 0;
+  
+  const parsedWorkers = parseInt(G('cfg_workers'));
+  c.search_settings.num_workers = isNaN(parsedWorkers) ? 10 : parsedWorkers;
+  
+  const parsedSearchDays = parseInt(G('cfg_search_days'));
+  c.search_settings.search_days_before_today = isNaN(parsedSearchDays) ? 0 : parsedSearchDays;
   
   c.search_settings.date_range_filter = {
     enabled: B('cfg_date_filter_enabled'),
@@ -1422,9 +1464,12 @@ function saveConfigForm() {
   c.search_settings.target_labels = csv('cfg_target_labels');
   c.search_settings.exceptional_keywords = csv('cfg_ex_keywords');
   c.search_settings.exceptional_senders = csv('cfg_ex_senders');
+  
+  const parsedRedDays = parseInt(G('cfg_days_red'));
+  const parsedYellowDays = parseInt(G('cfg_days_yellow'));
   c.search_settings.label_specific_days_before = {
-    'Kırmızı Etiketli': parseInt(G('cfg_days_red')) || 60,
-    'Sarı Etiketli': parseInt(G('cfg_days_yellow')) || 120
+    'Kırmızı Etiketli': isNaN(parsedRedDays) ? 60 : parsedRedDays,
+    'Sarı Etiketli': isNaN(parsedYellowDays) ? 120 : parsedYellowDays
   };
   
   c.sources = saveSources();
@@ -1432,7 +1477,9 @@ function saveConfigForm() {
   if (!c.appointment_email_settings) c.appointment_email_settings = {};
   c.appointment_email_settings.enabled = B('cfg_appt_enabled');
   c.appointment_email_settings.filter_past_dates = B('cfg_appt_past');
-  c.appointment_email_settings.randevu_search_days = parseInt(G('cfg_appt_days')) || 60;
+  
+  const parsedApptDays = parseInt(G('cfg_appt_days'));
+  c.appointment_email_settings.randevu_search_days = isNaN(parsedApptDays) ? 60 : parsedApptDays;
   c.appointment_email_settings.search_only_unread = B('cfg_appt_unread');
   
   if (!c.manual_source_settings) c.manual_source_settings = {};
