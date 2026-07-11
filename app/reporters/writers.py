@@ -116,7 +116,7 @@ def write_csv(results: List[Dict[str, Any]], path: str = "rapor_ozeti.csv") -> N
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         
         with open(path, "w", encoding="utf-8-sig", newline="") as f:
-            writer: csv.DictWriter = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
+            writer: csv.DictWriter[str] = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
             writer.writeheader()
             
             r: Dict[str, Any]
@@ -161,13 +161,12 @@ def generate_reports(results: List[Dict[str, Any]], formats: List[str], output_d
     """Belirlenen formatlarda tüm rapor çıktılarını eşzamanlı olarak üretir.
 
     Args:
-        results (List[Dict[str, Any]]): İşleme sonuçları.
+        results (List[Dict[str, Any]]): İşleme sonuçları (Boş liste durumunda dosyalar sıfırlanır).
         formats (List[str]): İstenen formatlar.
         output_dir (str): Dosyaların kaydedileceği klasör.
     """
     if not results:
-        log.warning("Raporlanacak herhangi bir veri bulunamadı.")
-        return
+        log.info("Raporlanacak veri kalmadı, mevcut çıktı dosyaları sıfırlanıyor.")
         
     fmt: str
     for fmt in formats:

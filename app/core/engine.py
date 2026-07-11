@@ -80,7 +80,12 @@ def run_watch(config_path: str = "app_manifest") -> None:
             log.error(f"🔄 Döngü #{cycle} sırasında hata oluştu: {e}", exc_info=True)
 
         log.info(f"⏳ {interval} dakika bekleniyor...")
-        if _watch_stop.wait(timeout=interval * 60):
+        target_time: float = time.time() + (interval * 60)
+        while time.time() < target_time:
+            if _watch_stop.wait(timeout=1.0):
+                break
+                
+        if _watch_stop.is_set():
             break
 
     log.info("👁️  Dinleme modu başarıyla durduruldu.")

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import threading
+import time
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Tuple, Dict, List, Optional, Union, cast
@@ -18,6 +19,7 @@ from app.utils.logging import setup_logging, set_socketio, get_recent_logs, get_
 from app.core.engine import run
 from app.core.database import Database, get_task_result, set_task_result, get_secure_config, set_secure_config, delete_secure_config
 from app.downloaders.engine import reload_profiles
+from app.reporters.writers import generate_reports
 from app.paths import paths
 
 log: logging.Logger = get_logger(__name__)
@@ -101,6 +103,23 @@ def _remove_from_archive(ids_to_remove: List[str]) -> None:
                 
     valid_arch: List[Dict[str, Any]] = [r for r in arch_list if _get_unique_key(r) not in ids_to_remove]
     set_task_result("web_archived_results", {"data": valid_arch})
+
+
+def _sync_reports(results: List[Dict[str, Any]]) -> None:
+    """Arayüzdeki güncel listeyi (silinmiş haliyle) diskteki çıktılara (WhatsApp, Excel) anında yansıtır.
+    
+    Args:
+        results (List[Dict[str, Any]]): Güncel ve geçerli sonuç listesi.
+    """
+    try:
+        config: Dict[str, Any] = load_config()
+        formats: List[str] = config.get("output_formats", [])
+        output_dir: str = config.get("paths", {}).get("output_folder", ".")
+        if formats:
+            generate_reports(results, formats, output_dir)
+            log.info("🔄 Çıktı dosyaları (WhatsApp, vb.) arka planda yeni listeye göre güncellendi.")
+    except Exception as e:
+        log.error(f"Çıktı dosyaları güncellenirken hata oluştu: {e}")
 
 
 def create_app() -> Tuple[Flask, SocketIO]:
@@ -333,7 +352,14 @@ def create_app() -> Tuple[Flask, SocketIO]:
                                 _running = False
 
                     log.info(f"⏳ {interval} dakika bekleniyor...")
-                    if _watch_stop.wait(timeout=interval * 60):  # pyright: ignore[reportPrivateUsage]
+                    
+                    target_time: float = time.time() + (interval * 60)
+                    while time.time() < target_time:
+                        if _watch_stop.is_set():  # pyright: ignore[reportPrivateUsage]
+                            break
+                        socketio.sleep(1)  # pyright: ignore[reportUnknownMemberType]
+
+                    if _watch_stop.is_set():  # pyright: ignore[reportPrivateUsage]
                         break
 
             except Exception as e:
@@ -401,6 +427,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             if all_results:
                 valid_results: List[Dict[str, Any]] = [r for r in all_results if _get_unique_key(r) != item_id]
                 set_task_result("web_last_results", {"data": valid_results})
+                _sync_reports(valid_results)
             
             _remove_from_archive([item_id])
                 
@@ -464,6 +491,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
                         
                 _backup_to_archive(archived_results)
                 set_task_result("web_last_results", {"data": valid_results})
+                _sync_reports(valid_results)
                 
             log.info(f"➖ {len(ids_to_delete)} adet sonuç sadece ekran listesinden kaldırıldı ve arşive taşındı.")
             return jsonify({"status": "deleted"})
@@ -504,6 +532,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
             if all_results:
                 valid_results: List[Dict[str, Any]] = [r for r in all_results if _get_unique_key(r) not in ids_to_delete]
                 set_task_result("web_last_results", {"data": valid_results})
+                _sync_reports(valid_results)
             
             _remove_from_archive(ids_to_delete)
                 
@@ -590,6 +619,9 @@ def create_app() -> Tuple[Flask, SocketIO]:
             merged_results: List[Dict[str, Any]] = list(existing_map.values())
             set_task_result("web_last_results", {"data": merged_results})
             
+            if added_count > 0:
+                _sync_reports(merged_results)
+                
             log.info(f"📥 Veritabanından ve arşivden {added_count} adet kayıt başarıyla listeye okundu.")
             return jsonify({"status": "fetched", "count": added_count})
         except Exception as error:
@@ -615,6 +647,7 @@ def create_app() -> Tuple[Flask, SocketIO]:
                         
             _backup_to_archive(all_results)
             set_task_result("web_last_results", {"data": []})
+            _sync_reports([])
             
             log.info("🗑️ Tüm sonuçlar ekran listesinden temizlendi (Veritabanı korundu).")
             return jsonify({"status": "cleared"})
@@ -629,6 +662,8 @@ def create_app() -> Tuple[Flask, SocketIO]:
             deleted_count: int = db.clear_all_data()
             set_task_result("web_last_results", {"data": []})
             set_task_result("web_archived_results", {"data": []})
+            _sync_reports([])
+            
             return jsonify({"status": "cleared", "deleted_count": deleted_count})
         except Exception as error:
             log.error("Veritabanı sıfırlanırken hata: %s", str(error))
