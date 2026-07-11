@@ -11,6 +11,8 @@ import socket
 import threading
 import os
 import base64
+import sys
+import urllib.request
 from typing import Optional, Dict, Any, List
 
 from google.auth.transport.requests import Request
@@ -26,6 +28,8 @@ log: Any = get_logger(__name__)
 SCOPES: List[str] = ["https://www.googleapis.com/auth/gmail.modify"]
 
 _auth_url: Optional[str] = None
+_auth_port: Optional[int] = None
+_auth_cancelled: bool = False
 _auth_event: threading.Event = threading.Event()
 
 
@@ -144,7 +148,7 @@ def authenticate() -> Optional[Resource]:
     Returns:
         Optional[Resource]: Başarılı olursa Gmail API servis nesnesi, aksi halde None.
     """
-    global _auth_url
+    global _auth_url, _auth_port, _auth_cancelled
     creds: Optional[Credentials] = None
 
     token_info: Optional[Dict[str, Any]] = _get_db_config("auth_token")
@@ -177,6 +181,7 @@ def authenticate() -> Optional[Resource]:
                 _set_db_config("auth_token", json.loads(creds.to_json()))
                 log.info("Yeni erişim jetonu başarıyla şifreli veritabanına kaydedildi.")
                 _auth_url = None
+                _auth_port = None
             except Exception as e:
                 log.error(f"Jeton veritabanına kaydedilemedi: {e}")
 
@@ -188,6 +193,34 @@ def authenticate() -> Optional[Resource]:
     except Exception as e:
         log.critical(f"Gmail servisi oluşturulurken hata: {e}")
         return None
+
+
+def cancel_pending_auth() -> bool:
+    """Kullanıcının iptal isteği üzerine bekleyen yerel sunucu akışını sonlandırır.
+    
+    Yerel sunucuya sahte bir reddedilme isteği (error=access_denied) göndererek
+    zaman aşımını (timeout) beklemeden sunucunun derhal unblock olmasını sağlar.
+    
+    Returns:
+        bool: İptal işlemi başarılı olduysa True, aksi halde False.
+    """
+    global _auth_port, _auth_url, _auth_cancelled
+    _auth_cancelled = True
+    
+    if _auth_port:
+        try:
+            req: urllib.request.Request = urllib.request.Request(f"http://localhost:{_auth_port}/?error=access_denied")
+            with urllib.request.urlopen(req, timeout=2):
+                pass
+        except Exception as e:
+            log.debug(f"İptal isteği sonucunda beklenen kapanma gerçekleşti: {e}")
+        finally:
+            _auth_port = None
+            _auth_url = None
+        return True
+        
+    _auth_url = None
+    return False
 
 
 def _run_oauth_flow(client_config: Dict[str, Any]) -> Optional[Credentials]:
@@ -202,11 +235,14 @@ def _run_oauth_flow(client_config: Dict[str, Any]) -> Optional[Credentials]:
     Returns:
         Optional[Credentials]: Yetkilendirme başarılıysa kimlik bilgileri, değilse None.
     """
-    global _auth_url
+    global _auth_url, _auth_port, _auth_cancelled
+    _auth_cancelled = False
+    creds: Optional[Credentials] = None
 
     try:
         flow: InstalledAppFlow = InstalledAppFlow.from_client_config(client_config, SCOPES)
         port: int = _find_free_port()
+        _auth_port = port
         flow.redirect_uri = f"http://localhost:{port}/"
 
         auth_state: str = base64.urlsafe_b64encode(os.urandom(16)).decode('utf-8').rstrip('=')
@@ -229,7 +265,7 @@ def _run_oauth_flow(client_config: Dict[str, Any]) -> Optional[Credentials]:
 
         log.info(f"Yönlendirme bekleniyor (Port: {port})...")
 
-        creds: Optional[Credentials] = flow.run_local_server(
+        creds = flow.run_local_server(
             host="localhost",
             port=port,
             open_browser=False,
@@ -247,29 +283,44 @@ def _run_oauth_flow(client_config: Dict[str, Any]) -> Optional[Credentials]:
         return creds
 
     except Exception as e:
-        log.warning(f"Otomatik yetkilendirme akışı başarısız oldu: {e}. Manuel moda geçiliyor...")
-
-    try:
-        flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-        flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-        
-        auth_url, _ = flow.authorization_url(prompt="consent")
-        _auth_url = auth_url
-        
-        from app.utils.logging import _socketio
-        if _socketio:
-            _socketio.emit("auth_required", {"url": auth_url, "manual": True}, namespace="/logs")
-
-        print(f"\nMANUEL DOĞRULAMA GEREKLİ\nLütfen bu URL'yi ziyaret edin: {auth_url}\n")
-        code: str = input("Tarayıcıdan aldığınız kodu buraya yapıştırın: ").strip()
-        
-        if code:
-            flow.fetch_token(code=code)
+        if _auth_cancelled:
+            log.info("Yetkilendirme işlemi kullanıcı tarafından iptal edildi.")
             _auth_url = None
-            return flow.credentials
+            _auth_port = None
+            return None
             
-    except Exception as e:
-        log.critical(f"Manuel yetkilendirme de başarısız oldu: {e}")
+        log.warning(f"Otomatik yetkilendirme akışı başarısız oldu: {e}. Manuel moda geçiliyor...")
+    finally:
+        _auth_port = None
+
+    if not _auth_cancelled and not creds:
+        try:
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+            flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
+            
+            auth_url, _ = flow.authorization_url(prompt="consent")
+            _auth_url = auth_url
+            
+            from app.utils.logging import _socketio
+            if _socketio:
+                _socketio.emit("auth_required", {"url": auth_url, "manual": True}, namespace="/logs")
+
+            print(f"\nMANUEL DOĞRULAMA GEREKLİ\nLütfen bu URL'yi ziyaret edin: {auth_url}\n")
+            
+            if not sys.stdin or not sys.stdin.isatty():
+                log.error("Etkileşimli bir terminal bulunamadı. Arka plan thread'inin kilitlenmemesi için manuel mod iptal edildi.")
+                _auth_url = None
+                return None
+                
+            code: str = input("Tarayıcıdan aldığınız kodu buraya yapıştırın: ").strip()
+            
+            if code:
+                flow.fetch_token(code=code)
+                _auth_url = None
+                return flow.credentials
+                
+        except Exception as e:
+            log.critical(f"Manuel yetkilendirme de başarısız oldu: {e}")
 
     _auth_url = None
     return None

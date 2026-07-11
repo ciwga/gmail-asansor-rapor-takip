@@ -14,6 +14,11 @@ let allResults = [];
 let _pollTimer = null;
 
 /**
+ * @type {number|null}
+ */
+let _authPollTimer = null;
+
+/**
  * @type {number}
  */
 let _currentRunId = 0;
@@ -562,12 +567,13 @@ function showAuthModal(url) {
   modal.style.display = 'flex';
   setStatus('running', 'Yetkilendirme bekleniyor...');
   
-  const pollAuth = setInterval(() => {
+  if (_authPollTimer) clearInterval(_authPollTimer);
+  
+  _authPollTimer = setInterval(() => {
     fetch('/api/auth/status')
       .then(r => r.json())
       .then(d => {
         if (!d.auth_url) {
-          clearInterval(pollAuth);
           hideAuthModal();
         }
       })
@@ -581,6 +587,27 @@ function showAuthModal(url) {
  */
 function hideAuthModal() {
   document.getElementById('authModal').style.display = 'none';
+  if (_authPollTimer) {
+    clearInterval(_authPollTimer);
+    _authPollTimer = null;
+  }
+}
+
+/**
+ * Kullanıcı yetkilendirmeden vazgeçtiğinde işlemi sunucu tarafında da iptal eder.
+ * @returns {void}
+ */
+function cancelAuth() {
+  fetch('/api/auth/cancel', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      hideAuthModal();
+      setStatus('idle', 'İşlem iptal edildi');
+      document.getElementById('runBtn').disabled = false;
+    })
+    .catch(() => {
+      hideAuthModal();
+    });
 }
 
 /**

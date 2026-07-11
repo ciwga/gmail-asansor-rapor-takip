@@ -294,7 +294,6 @@ def create_app() -> Tuple[Flask, SocketIO]:
                     
                     log.info(f"🔄 Döngü #{cycle} başlıyor...")
                     
-                    # Eşzamanlı başlatmaları engellemek için kontrol
                     can_run = False
                     with _lock:
                         if not _running:
@@ -819,6 +818,14 @@ def create_app() -> Tuple[Flask, SocketIO]:
         threading.Thread(target=_bg_label_del, daemon=True).start()
         
         return jsonify({"status": "started", "action": "delete_labels"})
+
+    @app.route("/api/auth/cancel", methods=["POST"])
+    def cancel_auth_route() -> Union[Response, Tuple[Response, int]]:  # pyright: ignore[reportUnusedFunction]
+        """Bekleyen OAuth yetkilendirme işlemini iptal eder."""
+        from app.gmail.auth import cancel_pending_auth
+        with _lock:
+            success: bool = cancel_pending_auth()
+            return jsonify({"status": "cancelled", "success": success})
 
     @app.route("/api/logs", methods=["GET"])
     def logs() -> Response:  # pyright: ignore[reportUnusedFunction]

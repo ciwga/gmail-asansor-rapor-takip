@@ -514,7 +514,12 @@
       <div style="font-size:48px;margin-bottom:16px">🔐</div>
       <h3 style="margin-bottom:12px;font-size:20px;color:var(--text);">Google Yetkilendirmesi Gerekiyor</h3>
       <p style="color:var(--text-muted);font-size:14px;line-height:1.5;margin-bottom:24px">Asansör Denetçisi'nin e-postalarınızı okuyabilmesi için güvenli bir şekilde Google hesabınızla giriş yapmanız gerekmektedir. İşlem tarayıcınızda gerçekleşecektir.</p>
-      <a id="authLink" href="#" target="_blank" style="display:inline-block;padding:14px 28px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Google ile Devam Et</a>
+      
+      <div style="display: flex; gap: 12px; justify-content: center; margin-top: 16px;">
+        <a id="authLink" href="#" target="_blank" style="display:inline-block;padding:14px 28px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Google ile Devam Et</a>
+        <button onclick="cancelAuth()" style="display:inline-block;padding:14px 28px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;font-size:15px;transition: all 0.2s;" onmouseover="this.style.background='rgba(128,128,128,0.1)'" onmouseout="this.style.background='transparent'">Vazgeç</button>
+      </div>
+
       <p style="color:var(--text-muted);font-size:12px;margin-top:20px;opacity:0.8;">İzin verdikten sonra bu pencere otomatik olarak kapanacaktır.</p>
     </div>
   </div>
