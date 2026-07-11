@@ -23,6 +23,12 @@ let _currentRunId = 0;
  */
 let _isRunning = false;
 
+/**
+ * Otomatik kaydetme için debounce zamanlayıcısı
+ * @type {number|null}
+ */
+let _autoSaveTimer = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   initThemeAndView();
   initSocket();
@@ -48,11 +54,48 @@ document.addEventListener('DOMContentLoaded', () => {
       sb.classList.toggle('closed');
     }
   };
+
+  // Otomatik Kaydetme Olay Dinleyicileri
+  const configPanel = document.getElementById('panel-config');
+  if (configPanel) {
+    // Metin alanlarındaki her harf girişi için
+    configPanel.addEventListener('input', (e) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.type !== 'file') {
+        triggerAutoSave();
+      }
+    });
+    // Onay kutuları ve seçim değişiklikleri için
+    configPanel.addEventListener('change', (e) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.type !== 'file') {
+        triggerAutoSave();
+      }
+    });
+  }
 });
 
 /**
+ * Ayarları arka planda güvenle otomatik kaydeder.
+ * @returns {void}
+ */
+function triggerAutoSave() {
+  if (_autoSaveTimer) {
+    clearTimeout(_autoSaveTimer);
+  }
+  const statusEl = document.getElementById('autoSaveStatus');
+  if (statusEl) {
+    statusEl.textContent = '⏳ Kaydediliyor...';
+    statusEl.style.color = 'var(--text-muted)';
+    statusEl.style.opacity = '1';
+  }
+  
+  _autoSaveTimer = setTimeout(() => {
+    saveConfigForm();
+  }, 750); // Kullanıcı işlem yaptıktan 750ms sonra tetiklenir
+}
+
+/**
  * Kullanıcı tema ve görünüm tercihlerini uygular.
- * * @returns {void}
+ * @returns {void}
  */
 function initThemeAndView() {
   const savedTheme = localStorage.getItem('appTheme');
@@ -75,7 +118,7 @@ function initThemeAndView() {
 
 /**
  * Aydınlık ve karanlık tema arasında geçiş yapar.
- * * @returns {void}
+ * @returns {void}
  */
 function toggleTheme() {
   const body = document.body;
@@ -92,7 +135,7 @@ function toggleTheme() {
 
 /**
  * Sonuçlar listesi görünüm modunu değiştirir.
- * * @returns {void}
+ * @returns {void}
  */
 function toggleViewMode() {
   const list = document.getElementById('resultList');
@@ -110,7 +153,7 @@ function toggleViewMode() {
 
 /**
  * Sunucu ile gerçek zamanlı bağlantıyı başlatır.
- * * @returns {void}
+ * @returns {void}
  */
 function initSocket() {
   socket = io('/logs', {
@@ -139,7 +182,7 @@ function initSocket() {
     console.log('[DEBUG] Arka planda yeni veriler bulundu, arayüz güncelleniyor...');
     loadResults();
   });
-    
+  
   socket.on('watch_cycle_started', function(data) {
     console.log('[DEBUG] İzleme döngüsü başladı:', data);
     if (!_isRunning) {
@@ -159,7 +202,7 @@ function initSocket() {
 
 /**
  * Motoru tetikleyerek tarama işlemini başlatır.
- * * @returns {void}
+ * @returns {void}
  */
 function startRun() {
   console.log('[DEBUG] startRun called, btn disabled:', document.getElementById('runBtn').disabled);
@@ -207,7 +250,7 @@ let _doneConfirmCount = 0;
 
 /**
  * Sunucudan durum kontrol döngüsünü başlatır.
- * * @returns {void}
+ * @returns {void}
  */
 function startPolling() {
   stopPolling();
@@ -217,7 +260,7 @@ function startPolling() {
 
 /**
  * Sunucu durumunu sorgular ve arayüzü günceller.
- * * @returns {void}
+ * @returns {void}
  */
 function _doPoll() {
   _pollTimer = setTimeout(() => {
@@ -276,7 +319,7 @@ function _doPoll() {
 
 /**
  * Durum kontrol döngüsünü durdurur.
- * * @returns {void}
+ * @returns {void}
  */
 function stopPolling() {
   if (_pollTimer) {
@@ -287,7 +330,7 @@ function stopPolling() {
 
 /**
  * Motorun genel durumunu sorgular.
- * * @returns {void}
+ * @returns {void}
  */
 function checkStatus() {
   fetch('/api/status?_=' + Date.now())
@@ -318,7 +361,7 @@ let _resetTimer = null;
 
 /**
  * Durum sıfırlama işlemlerini yönetir.
- * * @returns {void}
+ * @returns {void}
  */
 function onStatusTap() {
   _resetTaps++;
@@ -343,7 +386,7 @@ function onStatusTap() {
 
 /**
  * Yetkilendirme dosyalarının durumunu kontrol eder.
- * * @returns {void}
+ * @returns {void}
  */
 function checkAuthFiles() {
   fetch('/api/auth/status?_=' + Date.now())
@@ -380,7 +423,7 @@ function checkAuthFiles() {
 
 /**
  * Yetkilendirme dosyası yükler.
- * * @param {string} type 
+ * @param {string} type 
  * @param {HTMLInputElement} input 
  * @returns {void}
  */
@@ -409,7 +452,7 @@ function uploadAuthFile(type, input) {
 
 /**
  * İlgili yetkilendirme dosyasını indirir.
- * * @param {string} type 
+ * @param {string} type 
  * @returns {void}
  */
 function downloadAuthFile(type) {
@@ -418,7 +461,7 @@ function downloadAuthFile(type) {
 
 /**
  * Mevcut jeton verisini siler.
- * * @returns {void}
+ * @returns {void}
  */
 function deleteToken() {
   if (!confirm('token.json silinsin mi? Bir sonraki çalıştırmada yeniden yetkilendirme gerekecek.')) {
@@ -438,7 +481,7 @@ function deleteToken() {
 
 /**
  * Periyodik tarama modunun durumunu değiştirir.
- * * @returns {void}
+ * @returns {void}
  */
 function toggleWatch() {
   fetch('/api/status')
@@ -449,7 +492,7 @@ function toggleWatch() {
           updateWatchUI(false);
         });
       } else {
-        saveConfigForm();
+        saveConfigForm(); // Explicit save.
         setTimeout(() => {
           fetch('/api/watch/start', { method: 'POST' })
             .then(async r => {
@@ -472,7 +515,7 @@ function toggleWatch() {
 
 /**
  * Periyodik tarama arayüz durumunu günceller.
- * * @param {boolean} active 
+ * @param {boolean} active 
  * @returns {void}
  */
 function updateWatchUI(active) {
@@ -496,7 +539,7 @@ function updateWatchUI(active) {
 
 /**
  * Arayüzdeki genel durum rozetini günceller.
- * * @param {string} s 
+ * @param {string} s 
  * @param {string} t 
  * @returns {void}
  */
@@ -508,7 +551,7 @@ function setStatus(s, t) {
 
 /**
  * Yetkilendirme penceresini görüntüler.
- * * @param {string} url 
+ * @param {string} url 
  * @returns {void}
  */
 function showAuthModal(url) {
@@ -534,7 +577,7 @@ function showAuthModal(url) {
 
 /**
  * Yetkilendirme penceresini gizler.
- * * @returns {void}
+ * @returns {void}
  */
 function hideAuthModal() {
   document.getElementById('authModal').style.display = 'none';
@@ -542,7 +585,7 @@ function hideAuthModal() {
 
 /**
  * Log nesnesini arayüze ekler.
- * * @param {Object} e 
+ * @param {Object} e 
  * @returns {void}
  */
 function onLogEntry(e) {
@@ -551,7 +594,7 @@ function onLogEntry(e) {
 
 /**
  * İlerleme çubuğunu günceller.
- * * @param {number} pct 
+ * @param {number} pct 
  * @returns {void}
  */
 function showProgress(pct) {
@@ -563,7 +606,7 @@ function showProgress(pct) {
 
 /**
  * İlerleme çubuğunu gizler.
- * * @returns {void}
+ * @returns {void}
  */
 function hideProgress() {
   document.getElementById('progressBar').classList.remove('active');
@@ -572,7 +615,7 @@ function hideProgress() {
 
 /**
  * İşlenen sonuçları sunucudan alır.
- * * @returns {void}
+ * @returns {void}
  */
 function loadResults() {
   fetch('/api/results')
@@ -591,7 +634,7 @@ function loadResults() {
 
 /**
  * Listede listelenen kayıtların tümünü seçer ya da seçimi kaldırır.
- * * @param {HTMLInputElement} cb 
+ * @param {HTMLInputElement} cb 
  * @returns {void}
  */
 function toggleSelectAll(cb) {
@@ -602,7 +645,7 @@ function toggleSelectAll(cb) {
 
 /**
  * Kullanıcının işaretlediği kayıt sayısını günceller.
- * * @returns {void}
+ * @returns {void}
  */
 function updateSelectedCount() {
   const count = document.querySelectorAll('.row-select-cb:checked').length;
@@ -611,7 +654,7 @@ function updateSelectedCount() {
 
 /**
  * Arayüzde seçilmiş olan tüm satırların kimliklerini okur.
- * * @returns {Array<string>}
+ * @returns {Array<string>}
  */
 function getSelectedIds() {
   return Array.from(document.querySelectorAll('.row-select-cb:checked')).map(c => c.value);
@@ -619,7 +662,7 @@ function getSelectedIds() {
 
 /**
  * Kullanıcının seçtiği kayıtları YALNIZCA arayüz listesinden kaldırır.
- * * @returns {void}
+ * @returns {void}
  */
 function deleteSelectedList() {
   const ids = getSelectedIds();
@@ -651,7 +694,7 @@ function deleteSelectedList() {
 
 /**
  * Kullanıcının seçtiği kayıtları VERİTABANINDAN KALICI olarak siler.
- * * @returns {void}
+ * @returns {void}
  */
 function deleteSelectedDB() {
   const ids = getSelectedIds();
@@ -684,7 +727,7 @@ function deleteSelectedDB() {
 
 /**
  * Veritabanında saklı olan tüm eski raporları listeye geri çağırır.
- * * @returns {void}
+ * @returns {void}
  */
 function fetchFromDB() {
   if (!confirm('Veritabanındaki kayıtlı tüm geçmiş raporlar listeye eklensin mi?')) {
@@ -710,7 +753,7 @@ function fetchFromDB() {
 
 /**
  * Alınan sonuçları arayüze çizer.
- * * @param {Array<Object>} results 
+ * @param {Array<Object>} results 
  * @returns {void}
  */
 function renderResults(results) {
@@ -766,7 +809,7 @@ function renderResults(results) {
 
 /**
  * Sonuçları belirtilen filtreye göre düzenler.
- * * @returns {void}
+ * @returns {void}
  */
 function filterResults() {
   const f = document.getElementById('filterLabel').value;
@@ -775,7 +818,7 @@ function filterResults() {
 
 /**
  * Tarih dizgesini işlenebilir sayıya dönüştürür.
- * * @param {string} s 
+ * @param {string} s 
  * @returns {number}
  */
 function pd(s) {
@@ -792,7 +835,7 @@ function pd(s) {
 
 /**
  * Etiket verisine karşılık gelen emojiyi döndürür.
- * * @param {string} l 
+ * @param {string} l 
  * @returns {string}
  */
 function labelIcon(l) {
@@ -807,7 +850,7 @@ function labelIcon(l) {
 
 /**
  * Aciliyet durumunu sınıflandırır.
- * * @param {string} d 
+ * @param {string} d 
  * @returns {string}
  */
 function urgency(d) {
@@ -827,7 +870,7 @@ function urgency(d) {
 
 /**
  * Sistemdeki rapor dosyasını tamamen siler.
- * * @param {string} rid 
+ * @param {string} rid 
  * @returns {void}
  */
 function deletePdf(rid) {
@@ -849,7 +892,7 @@ function deletePdf(rid) {
 
 /**
  * Ekranda görüntülenen kaydı kaldırır.
- * * @param {string} rid 
+ * @param {string} rid 
  * @returns {void}
  */
 function deleteResult(rid) {
@@ -869,7 +912,7 @@ function deleteResult(rid) {
 
 /**
  * Raporu yeni sekmede açar.
- * * @param {string} rid 
+ * @param {string} rid 
  * @returns {void}
  */
 function openPdf(rid) {
@@ -878,7 +921,7 @@ function openPdf(rid) {
 
 /**
  * Görüntülenen tüm sonuçları listeden kaldırır.
- * * @returns {void}
+ * @returns {void}
  */
 function deleteAllResults() {
   if (!confirm('Arayüzdeki sonuçlar listeden silinsin mi? (Bu işlem sadece görünen listeyi temizler, veritabanına dokunmaz)')) {
@@ -899,7 +942,7 @@ function deleteAllResults() {
 
 /**
  * Veritabanındaki tüm kayıtları kalıcı olarak temizler.
- * * @returns {void}
+ * @returns {void}
  */
 function clearDatabase() {
   if (!confirm('DİKKAT: Veritabanındaki tüm işlenmiş e-posta geçmişi, rapor verileri ve indirilen PDF kayıtları kalıcı olarak silinecek! (Ayarlarınız ve yetkilendirmeleriniz korunur)\n\nE-postaların tekrar ilk günkü gibi taranabilmesini sağlayacak bu işlem geri alınamaz. Onaylıyor musunuz?')) {
@@ -924,7 +967,7 @@ function clearDatabase() {
 
 /**
  * Arayüze yeni bir e-posta kaynağı satırı ekler.
- * * @param {string} label 
+ * @param {string} label 
  * @param {string} query 
  * @param {string} proc 
  * @returns {void}
@@ -932,26 +975,25 @@ function clearDatabase() {
 function addSourceRow(label, query, proc) {
   const c = document.getElementById('sourcesContainer');
   const row = document.createElement('div');
-  row.className = 'cfg-row';
-  row.style.gap = '4px';
+  row.className = 'cfg-row source-row';
   row.innerHTML = `
-    <input type="text" class="input-sm src-label" value="${esc(label || '')}" placeholder="Etiket adı" style="flex:1;max-width:none">
-    <input type="text" class="input-sm src-query" value="${esc(query || '')}" placeholder="Gönderen" style="flex:2;max-width:none">
-    <select class="input-sm src-proc" style="max-width:none">
+    <input type="text" class="input-full src-label" value="${esc(label || '')}" placeholder="Bina/Etiket Adı">
+    <input type="text" class="input-full src-query" value="${esc(query || '')}" placeholder="Gönderen Mail Adresi">
+    <select class="input-full src-proc">
       <option value="adetsis"${proc === 'adetsis' ? ' selected' : ''}>Adetsis</option>
       <option value="mmo"${proc === 'mmo' ? ' selected' : ''}>MMO</option>
       <option value="artibel"${proc === 'artibel' ? ' selected' : ''}>Artıbel</option>
       <option value="optimaldenge"${proc === 'optimaldenge' ? ' selected' : ''}>Optimal Denge</option>
       <option value="appointment"${proc === 'appointment' ? ' selected' : ''}>Randevu</option>
     </select>
-    <button class="btn-sm" onclick="this.parentElement.remove()" style="color:var(--red);padding:4px 8px">✕</button>
+    <button class="btn-sm danger" onclick="this.parentElement.remove(); triggerAutoSave();">✕ Kaldır</button>
   `;
   c.appendChild(row);
 }
 
 /**
  * Kaynakları panele yükler.
- * * @param {Array<Object>} sources 
+ * @param {Array<Object>} sources 
  * @returns {void}
  */
 function loadSources(sources) {
@@ -962,10 +1004,10 @@ function loadSources(sources) {
 
 /**
  * Arayüzdeki kaynak satırlarını toplayıp listeye dönüştürür.
- * * @returns {Array<Object>}
+ * @returns {Array<Object>}
  */
 function saveSources() {
-  const rows = document.querySelectorAll('#sourcesContainer .cfg-row');
+  const rows = document.querySelectorAll('#sourcesContainer .source-row');
   return Array.from(rows).map(r => {
     const l = r.querySelector('.src-label').value.trim();
     const q = r.querySelector('.src-query').value.trim();
@@ -976,7 +1018,7 @@ function saveSources() {
 
 /**
  * Sonuç detay panelini açar.
- * * @param {number} i 
+ * @param {number} i 
  * @returns {void}
  */
 function showDetail(i) {
@@ -1034,7 +1076,7 @@ function showDetail(i) {
 
 /**
  * Açık olan detay panelini kapatır.
- * * @returns {void}
+ * @returns {void}
  */
 function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
@@ -1042,9 +1084,9 @@ function closeDrawer() {
 }
 
 /**
- * Terminal ANSI renk ve format kodlarını (ör: \x1b[37m) metinden tamamen temizler.
- * @param {string} str İşlenecek metin.
- * @returns {string} Temizlenmiş salt metin.
+ * Terminal ANSI renk ve format kodlarını metinden temizler.
+ * @param {string} str 
+ * @returns {string}
  */
 function stripAnsi(str) {
   if (!str) return '';
@@ -1053,7 +1095,7 @@ function stripAnsi(str) {
 
 /**
  * Arayüze log satırı ekler. Terminal ANSI kodlarını otomatik olarak ayıklar.
- * * @param {Object} e 
+ * @param {Object} e 
  * @returns {void}
  */
 function appendLog(e) {
@@ -1080,7 +1122,7 @@ function appendLog(e) {
 
 /**
  * Log ekranını temizler.
- * * @returns {void}
+ * @returns {void}
  */
 function clearLogs() {
   document.getElementById('logContainer').innerHTML = '';
@@ -1088,7 +1130,7 @@ function clearLogs() {
 
 /**
  * Güvenli klasör dizinleri için onay penceresi açar.
- * * @param {string} id 
+ * @param {string} id 
  * @returns {void}
  */
 function browseFolder(id) {
@@ -1129,13 +1171,17 @@ function browseFolder(id) {
     else if (finalPath === '2' && presets.length > 1) finalPath = presets[1].path;
     else if (finalPath === '3' && presets.length > 2) finalPath = presets[2].path;
     
-    document.getElementById(id).value = finalPath;
+    const inputEl = document.getElementById(id);
+    if (inputEl) {
+      inputEl.value = finalPath;
+      triggerAutoSave(); // Programatik değişikliği yakala
+    }
   }
 }
 
 /**
- * Sunucudan yapılandırma dosyasını yükler.
- * * @returns {void}
+ * Sunucudan yapılandırma dosyasını yükler ve UI elemanlarını doldurur.
+ * @returns {void}
  */
 function loadConfig() {
   fetch('/api/config')
@@ -1150,7 +1196,8 @@ function loadConfig() {
         throw new Error(c.error);
       }
       
-      document.getElementById('configEditor').value = JSON.stringify(c, null, 2);
+      const editorEl = document.getElementById('configEditor');
+      if (editorEl) editorEl.value = JSON.stringify(c, null, 2);
       
       const s = c.search_settings || {};
       const p = c.paths || {};
@@ -1161,10 +1208,39 @@ function loadConfig() {
       const dl = c.label_delete_settings || {};
       const tr = c.trash_mode_settings || {};
       
-      V('cfg_mode', c.mode || 'gmail');
+      // Temel Ayarlar UI
+      const isSearchByLabel = !!s.search_by_label;
+      const labelRadio = document.querySelector('input[name="searchMode"][value="label"]');
+      const normalRadio = document.querySelector('input[name="searchMode"][value="normal"]');
+      
+      if (isSearchByLabel && labelRadio) {
+         labelRadio.checked = true;
+      } else if (!isSearchByLabel && normalRadio) {
+         normalRadio.checked = true;
+      }
+      
+      C('cfg_only_unread', isSearchByLabel ? false : !!s.search_only_unread);
+      C('cfg_mark_read', s.mark_as_read_after_processing !== false);
+      C('cfg_archive', s.archive_after_processing);
+      
+      const df = s.date_range_filter || {};
+      C('cfg_date_filter_enabled', df.enabled);
+      V('cfg_date_start', df.start_date || '');
+      V('cfg_date_end', df.end_date || '');
+
+      // Randevu UI
+      C('cfg_appt_enabled', a.enabled !== false);
+      C('cfg_appt_past', a.filter_past_dates !== false);
+      C('cfg_appt_unread', !!a.search_only_unread);
+      V('cfg_appt_days', a.randevu_search_days || 60);
+
+      // Çıktı Formatları UI
       C('cfg_fmt_txt', (c.output_formats || []).includes('txt'));
       C('cfg_fmt_csv', (c.output_formats || []).includes('csv'));
       C('cfg_fmt_wa', (c.output_formats || []).includes('whatsapp'));
+
+      // Gelişmiş Ayarlar UI
+      V('cfg_mode', c.mode || 'gmail');
       V('cfg_web_host', w.host || '127.0.0.1');
       V('cfg_web_port', w.port || 5001);
       
@@ -1187,20 +1263,8 @@ function loadConfig() {
       V('cfg_path_db', p.database || '');
       V('cfg_path_log', p.log_file || '');
       
-      C('cfg_search_by_label', s.search_by_label);
-      C('cfg_only_unread', !!s.search_only_unread);
-      C('cfg_mark_read', s.mark_as_read_after_processing !== false);
-      C('cfg_archive', s.archive_after_processing);
-      
       V('cfg_workers', s.num_workers || 10);
       V('cfg_search_days', s.search_days_before_today || 0);
-
-      // TARİH ARALIĞI FİLTRESİ
-      const df = s.date_range_filter || {};
-      C('cfg_date_filter_enabled', df.enabled);
-      V('cfg_date_start', df.start_date || '');
-      V('cfg_date_end', df.end_date || '');
-
       V('cfg_target_labels', (s.target_labels || []).join(', '));
       V('cfg_ex_keywords', (s.exceptional_keywords || []).join(', '));
       V('cfg_ex_senders', (s.exceptional_senders || []).join(', '));
@@ -1210,11 +1274,6 @@ function loadConfig() {
       V('cfg_days_yellow', dy['Sarı Etiketli'] || 120);
       
       loadSources(c.sources);
-      
-      C('cfg_appt_enabled', a.enabled !== false);
-      C('cfg_appt_past', a.filter_past_dates !== false);
-      V('cfg_appt_days', a.randevu_search_days || 60);
-      C('cfg_appt_unread', !!a.search_only_unread);
       
       C('cfg_manual_enabled', m.enabled);
       V('cfg_manual_path', m.folder_path || '');
@@ -1242,13 +1301,40 @@ function loadConfig() {
 }
 
 /**
+ * Arama modu değiştirildiğinde tetiklenen mantık kuralları.
+ * @returns {void}
+ */
+function onSearchModeChange() {
+    const radio = document.querySelector('input[name="searchMode"]:checked');
+    if (!radio) return;
+    
+    const isLabel = radio.value === 'label';
+    
+    // Etiket moduna geçilirse "Sadece okunmamışlar"ı kapat, çünkü etiket zaten ayrıştırıcıdır.
+    if (isLabel) {
+        C('cfg_only_unread', false);
+        C('cfg_appt_unread', false);
+        C('cfg_fmt_wa', true);
+        C('cfg_mark_read', false);
+    } else {
+        C('cfg_only_unread', true);
+        C('cfg_appt_unread', true);
+        C('cfg_fmt_wa', false);
+        C('cfg_mark_read', true);
+    }
+}
+
+/**
  * Yapılandırma alanındaki verileri sunucuya gönderir ve kaydeder.
- * * @returns {void}
+ * @returns {void}
  */
 function saveConfigForm() {
   let c;
+  const editorEl = document.getElementById('configEditor');
+  if (!editorEl) return;
+
   try {
-    c = JSON.parse(document.getElementById('configEditor').value);
+    c = JSON.parse(editorEl.value);
   } catch(e) {
     alert("Hata: Ayarlar JSON formatında hatalı, lütfen kontrol edin.");
     return;
@@ -1256,6 +1342,7 @@ function saveConfigForm() {
   
   c.mode = G('cfg_mode');
   
+  // Çıktı Formatlarını Topla ve Kaydet
   const fm = [];
   if (B('cfg_fmt_txt')) fm.push('txt');
   if (B('cfg_fmt_csv')) fm.push('csv');
@@ -1289,14 +1376,16 @@ function saveConfigForm() {
   c.paths.log_file = G('cfg_path_log');
   
   if (!c.search_settings) c.search_settings = {};
-  c.search_settings.search_by_label = B('cfg_search_by_label');
+  
+  const radio = document.querySelector('input[name="searchMode"]:checked');
+  c.search_settings.search_by_label = radio ? (radio.value === 'label') : false;
+  
   c.search_settings.search_only_unread = B('cfg_only_unread');
   c.search_settings.mark_as_read_after_processing = B('cfg_mark_read');
   c.search_settings.archive_after_processing = B('cfg_archive');
   c.search_settings.num_workers = parseInt(G('cfg_workers')) || 10;
   c.search_settings.search_days_before_today = parseInt(G('cfg_search_days')) || 0;
   
-  // TARİH ARALIĞI FİLTRESİ
   c.search_settings.date_range_filter = {
     enabled: B('cfg_date_filter_enabled'),
     start_date: G('cfg_date_start'),
@@ -1343,7 +1432,9 @@ function saveConfigForm() {
   c.trash_mode_settings.run_in_test_mode = B('cfg_trash_test');
   c.trash_mode_settings.trash_rules = saveTrashRules();
   
-  document.getElementById('configEditor').value = JSON.stringify(c, null, 2);
+  editorEl.value = JSON.stringify(c, null, 2);
+  
+  const statusEl = document.getElementById('autoSaveStatus');
   
   fetch('/api/config', {
     method: 'POST',
@@ -1353,20 +1444,37 @@ function saveConfigForm() {
     .then(r => r.json())
     .then(d => {
       if (d.status === 'saved') {
-        alert('Başarıyla Kaydedildi!');
+        if (statusEl) {
+            statusEl.textContent = '✓ Otomatik kaydedildi';
+            statusEl.style.color = 'var(--green)';
+            statusEl.style.opacity = '1';
+            
+            setTimeout(() => {
+                if (statusEl.textContent === '✓ Otomatik kaydedildi') {
+                    statusEl.style.opacity = '0';
+                }
+            }, 2500);
+        }
       } else {
+        if (statusEl) {
+            statusEl.textContent = '⚠️ Kaydetme hatası';
+            statusEl.style.color = 'var(--red)';
+        }
         alert('Hata: ' + (d.error || 'Bilinmeyen bir hata oluştu.'));
       }
     })
     .catch(err => {
       console.error('Config kaydetme hatası:', err);
-      alert('Kaydetme sırasında bağlantı hatası oluştu.');
+      if (statusEl) {
+          statusEl.textContent = '⚠️ Bağlantı hatası';
+          statusEl.style.color = 'var(--red)';
+      }
     });
 }
 
 /**
  * Yeni bir temizlik kuralı alanı ekler.
- * * @param {string} labels 
+ * @param {string} labels 
  * @param {string} senders 
  * @param {string} keywords 
  * @param {string|number} days 
@@ -1396,7 +1504,7 @@ function addCleanupRule(labels, senders, keywords, days) {
       <label>Gün (eski)</label>
       <input type="number" class="input-sm cr-days" value="${days || ''}" placeholder="30" style="width:80px">
       <small class="field-hint">Bu günden eski e-postalara uygulanır (boş = tümü)</small>
-      <button class="btn-sm" onclick="this.closest('.rule-row').remove()" style="color:var(--red);margin-left:auto">✕ Kaldır</button>
+      <button class="btn-sm" onclick="this.closest('.rule-row').remove(); triggerAutoSave();" style="color:var(--red);margin-left:auto">✕ Kaldır</button>
     </div>
   `;
   c.appendChild(row);
@@ -1404,7 +1512,7 @@ function addCleanupRule(labels, senders, keywords, days) {
 
 /**
  * Yeni bir çöp kutusu kuralı alanı ekler.
- * * @param {string} labels 
+ * @param {string} labels 
  * @param {string} senders 
  * @param {string} keywords 
  * @param {string|number} days 
@@ -1434,7 +1542,7 @@ function addTrashRule(labels, senders, keywords, days) {
       <label>Gün (eski)</label>
       <input type="number" class="input-sm tr-days" value="${days || ''}" placeholder="90" style="width:80px">
       <small class="field-hint">Bu günden eski e-postalara uygulanır (boş = tümü)</small>
-      <button class="btn-sm" onclick="this.closest('.rule-row').remove()" style="color:var(--red);margin-left:auto">✕ Kaldır</button>
+      <button class="btn-sm" onclick="this.closest('.rule-row').remove(); triggerAutoSave();" style="color:var(--red);margin-left:auto">✕ Kaldır</button>
     </div>
   `;
   c.appendChild(row);
@@ -1442,11 +1550,13 @@ function addTrashRule(labels, senders, keywords, days) {
 
 /**
  * Kayıtlı temizlik kurallarını panellere yerleştirir.
- * * @param {Array<Object>} rules 
+ * @param {Array<Object>} rules 
  * @returns {void}
  */
 function loadCleanupRules(rules) {
-  document.getElementById('cleanupRulesContainer').innerHTML = '';
+  const container = document.getElementById('cleanupRulesContainer');
+  if (!container) return;
+  container.innerHTML = '';
   (rules || []).forEach(r => {
     const f = r.filters || {};
     addCleanupRule(
@@ -1460,11 +1570,13 @@ function loadCleanupRules(rules) {
 
 /**
  * Kayıtlı çöp kutusu kurallarını panellere yerleştirir.
- * * @param {Array<Object>} rules 
+ * @param {Array<Object>} rules 
  * @returns {void}
  */
 function loadTrashRules(rules) {
-  document.getElementById('trashRulesContainer').innerHTML = '';
+  const container = document.getElementById('trashRulesContainer');
+  if (!container) return;
+  container.innerHTML = '';
   (rules || []).forEach(r => {
     const f = r.filters || {};
     addTrashRule(
@@ -1478,7 +1590,7 @@ function loadTrashRules(rules) {
 
 /**
  * Arayüzdeki temizlik kurallarını listeye dönüştürür.
- * * @returns {Array<Object>}
+ * @returns {Array<Object>}
  */
 function saveCleanupRules() {
   return Array.from(document.querySelectorAll('#cleanupRulesContainer .rule-row')).map(r => ({
@@ -1493,7 +1605,7 @@ function saveCleanupRules() {
 
 /**
  * Arayüzdeki çöp kutusu kurallarını listeye dönüştürür.
- * * @returns {Array<Object>}
+ * @returns {Array<Object>}
  */
 function saveTrashRules() {
   return Array.from(document.querySelectorAll('#trashRulesContainer .rule-row')).map(r => ({
@@ -1508,17 +1620,19 @@ function saveTrashRules() {
 
 /**
  * Elemanların değerlerini ayrıştırır ve temizler.
- * * @param {HTMLElement} row 
+ * @param {HTMLElement} row 
  * @param {string} sel 
  * @returns {Array<string>}
  */
 function csv_val(row, sel) {
-  return (row.querySelector(sel).value || '').split(',').map(s => s.trim()).filter(Boolean);
+  const el = row.querySelector(sel);
+  if (!el) return [];
+  return (el.value || '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
 /**
  * Bakım görevini (temizlik vb.) tetikler.
- * * @param {string} action 
+ * @param {string} action 
  * @param {string} label 
  * @returns {void}
  */
@@ -1545,7 +1659,7 @@ function runMaintenance(action, label) {
 
 /**
  * İşlemci profillerini yükler.
- * * @returns {void}
+ * @returns {void}
  */
 function loadProfiles() {
   fetch('/api/scraping-profiles')
@@ -1556,11 +1670,14 @@ function loadProfiles() {
 
 /**
  * İşlemci profillerini kaydeder.
- * * @returns {void}
+ * @returns {void}
  */
 function saveProfiles() {
   try {
-    const d = JSON.parse(G('profileEditor'));
+    const editorVal = G('profileEditor');
+    if (!editorVal) return;
+    const d = JSON.parse(editorVal);
+    
     fetch('/api/scraping-profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1575,7 +1692,7 @@ function saveProfiles() {
 
 /**
  * Menü sekmeleri arasında geçiş yapar.
- * * @param {HTMLElement} el 
+ * @param {HTMLElement} el 
  * @returns {void}
  */
 function switchPanel(el) {
@@ -1585,7 +1702,10 @@ function switchPanel(el) {
   el.classList.add('active');
   
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + panelName).classList.add('active');
+  const targetPanel = document.getElementById('panel-' + panelName);
+  if (targetPanel) {
+      targetPanel.classList.add('active');
+  }
   
   const sb = document.getElementById('sidebar');
   if (window.innerWidth <= 768) {
@@ -1598,8 +1718,11 @@ function switchPanel(el) {
     fetch('/api/logs')
       .then(r => r.json())
       .then(l => {
-        document.getElementById('logContainer').innerHTML = '';
-        l.forEach(appendLog);
+        const container = document.getElementById('logContainer');
+        if (container) {
+            container.innerHTML = '';
+            l.forEach(appendLog);
+        }
       })
       .catch(() => {});
   }
@@ -1607,7 +1730,7 @@ function switchPanel(el) {
 
 /**
  * HTML özel karakterlerini filtreler.
- * * @param {string} s 
+ * @param {string} s 
  * @returns {string}
  */
 function esc(s) {
@@ -1620,48 +1743,57 @@ function esc(s) {
 }
 
 /**
- * Verilen id'li elemanın değerini döndürür.
- * * @param {string} id 
+ * Null korumalı: Verilen id'li elemanın değerini döndürür.
+ * @param {string} id 
  * @returns {string}
  */
 function G(id) {
-  return document.getElementById(id).value;
+  const el = document.getElementById(id);
+  return el ? el.value : '';
 }
 
 /**
- * Verilen id'li elemanın değerini atar.
- * * @param {string} id 
+ * Null korumalı: Verilen id'li elemanın değerini atar.
+ * @param {string} id 
  * @param {string} v 
  * @returns {void}
  */
 function V(id, v) {
-  document.getElementById(id).value = v;
+  const el = document.getElementById(id);
+  if (el) {
+    el.value = v;
+  }
 }
 
 /**
- * Verilen id'li checkbox durumunu döndürür.
- * * @param {string} id 
+ * Null korumalı: Verilen id'li checkbox durumunu döndürür.
+ * @param {string} id 
  * @returns {boolean}
  */
 function B(id) {
-  return document.getElementById(id).checked;
+  const el = document.getElementById(id);
+  return el ? el.checked : false;
 }
 
 /**
- * Verilen id'li checkbox durumunu atar.
- * * @param {string} id 
+ * Null korumalı: Verilen id'li checkbox durumunu atar.
+ * @param {string} id 
  * @param {boolean} v 
  * @returns {void}
  */
 function C(id, v) {
-  document.getElementById(id).checked = !!v;
+  const el = document.getElementById(id);
+  if (el) {
+    el.checked = !!v;
+  }
 }
 
 /**
  * CSV ayrılmış değerleri listeye dönüştürür.
- * * @param {string} id 
+ * @param {string} id 
  * @returns {Array<string>}
  */
 function csv(id) {
-  return G(id).split(',').map(s => s.trim()).filter(Boolean);
+  const val = G(id);
+  return val ? val.split(',').map(s => s.trim()).filter(Boolean) : [];
 }

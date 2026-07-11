@@ -10,13 +10,14 @@
 <body>
   <header class="topbar">
     <div class="topbar-left">
-      <button class="btn-icon" id="menuToggle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
-      <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 22V2M15 22V2M3 7h18M3 12h18M3 17h18"/></svg><span>Asansör Rapor</span></div>
+      <button class="btn-icon" id="menuToggle"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+      <div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 22V2M15 22V2M3 7h18M3 12h18M3 17h18"/></svg><span>Asansör Denetçisi</span></div>
     </div>
-    <div class="topbar-right" style="display: flex; align-items: center; gap: 10px;">
-      <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Tema Değiştir">
-        <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-        <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+    <div class="topbar-right" style="display: flex; align-items: center; gap: 12px;">
+      
+      <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Aydınlık/Karanlık Tema">
+        <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
       </button>
       <span class="status-badge" id="statusBadge" onclick="onStatusTap()">Hazır</span>
     </div>
@@ -24,11 +25,11 @@
 
   <div class="app-layout" id="appLayout">
     <nav class="sidebar" id="sidebar">
-      <button class="run-btn" id="runBtn" onclick="startRun()">▶ İşlemi Başlat</button>
-      <div class="nav-item active" data-panel="inbox" onclick="switchPanel(this)"><span>📥 Sonuçlar</span><span class="badge" id="resultCount">0</span></div>
-      <div class="nav-item" data-panel="logs" onclick="switchPanel(this)"><span>📋 Günlük</span></div>
+      <button class="run-btn" id="runBtn" onclick="startRun()">▶ Taramayı Başlat</button>
+      <div class="nav-item active" data-panel="inbox" onclick="switchPanel(this)"><span>📥 Kontrol Sonuçları</span><span class="badge" id="resultCount">0</span></div>
       <div class="nav-item" data-panel="config" onclick="switchPanel(this)"><span>⚙️ Ayarlar</span></div>
-      <div class="nav-item" data-panel="scraping" onclick="switchPanel(this)"><span>✏️ Scraping</span></div>
+      <div class="nav-item" data-panel="logs" onclick="switchPanel(this)"><span>📋 Sistem Günlüğü</span></div>
+      <div class="nav-item" data-panel="scraping" onclick="switchPanel(this)"><span>✏️ Veri Çekiciler</span></div>
       
       <div class="sidebar-footer" style="padding: 16px; margin-top: auto; border-top: 1px solid var(--border); text-align: center; font-size: 13px; color: var(--text-muted);">
         <div style="margin-bottom: 10px;">
@@ -37,37 +38,35 @@
         </div>
         <a href="https://github.com/ciwga/gmail-asansor-rapor-takip" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: inherit; text-decoration: none; transition: all 0.2s; width: 100%; box-sizing: border-box;" onmouseover="this.style.borderColor='var(--accent)'; this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'; this.style.color='inherit'">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-          <span>Proje Sayfası</span>
+          <span>Destek ve Kaynak</span>
         </a>
       </div>
     </nav>
 
     <div class="content-area">
-      <!-- SONUÇLAR -->
       <div class="panel active" id="panel-inbox">
         <div class="panel-header">
           <h2>Kontrol Sonuçları</h2>
           <div class="panel-actions">
-            <button class="btn-sm" id="viewToggleBtn" onclick="toggleViewMode()" title="Görünümü Değiştir">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <button class="btn-sm" id="viewToggleBtn" onclick="toggleViewMode()" title="Tablo/Kutu Görünümü Değiştir">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             </button>
             <select id="filterLabel" onchange="filterResults()">
-              <option value="">Tümü</option><option value="Kırmızı">🔴 Kırmızı</option><option value="Sarı">🟡 Sarı</option><option value="Mavi">🔵 Mavi</option><option value="Yeşil">🟢 Yeşil</option><option value="Randevu">📆 Randevu</option>
+              <option value="">Tümü Göster</option><option value="Kırmızı">🔴 Kırmızı</option><option value="Sarı">🟡 Sarı</option><option value="Mavi">🔵 Mavi</option><option value="Yeşil">🟢 Yeşil</option><option value="Randevu">📆 Randevu</option>
             </select>
-            <button class="btn-sm" onclick="fetchFromDB()" style="color: var(--green); border-color: var(--green);" title="Veritabanındaki geçmiş kayıtları listeye aktar">📥 DB'den Getir</button>
-            <button class="btn-sm" onclick="deleteSelectedList()" style="color: var(--orange); border-color: var(--orange);" title="Seçilen sonuçları sadece ekrandan kaldır">➖ Seçileni Çıkar</button>
-            <button class="btn-sm" onclick="deleteSelectedDB()" style="color: var(--red); border-color: var(--red);" title="Seçilen sonuçları veritabanından kalıcı olarak sil">🗑 Seçileni DB'den Sil</button>
-            <button class="btn-sm" onclick="deleteAllResults()" title="Görüntülenen tüm sonuçları listeden sil (DB'ye dokunmaz)">🗑 Liste</button>
-            <button class="btn-sm" onclick="clearDatabase()" title="Veritabanındaki tüm kayıtları (Raporlar, PDF'ler, İşlenmiş E-postalar) tamamen temizle" style="color: var(--red); border-color: var(--red);">💣 DB Sıfırla</button>
+            <button class="btn-sm" onclick="fetchFromDB()" style="color: var(--green); border-color: var(--green);" title="Geçmiş kayıtları listeye aktar">📥 Arşivi Çağır</button>
+            <button class="btn-sm" onclick="deleteSelectedList()" style="color: var(--yellow); border-color: var(--yellow);" title="Sadece ekrandan kaldır">➖ Seçileni Gizle</button>
+            <button class="btn-sm" onclick="deleteSelectedDB()" style="color: var(--red); border-color: var(--red);" title="Kalıcı olarak veritabanından sil">🗑 Seçileni Sil</button>
+            <button class="btn-sm" onclick="deleteAllResults()" title="Ekranı Temizle">🧹 Ekranı Temizle</button>
           </div>
         </div>
         
         <div class="list-controls" id="listControls">
           <div class="result-select" style="display:flex;align-items:center;justify-content:center;">
-            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent);">
+            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
           </div>
-          <div class="header-col header-icon" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: center;">Durum</div>
-          <div class="header-col header-main" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Bina / Firma Bilgisi</div>
+          <div class="header-col header-icon" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: center;">Etiket</div>
+          <div class="header-col header-main" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Bina Adı / Kontrol Firması</div>
           <div class="header-col header-date" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: right;">Kontrol Tarihi</div>
           <div class="header-col header-next" style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-align: right;">Sonraki Kontrol</div>
           <div class="header-col header-actions" style="font-size: 13px; font-weight: 600; color: var(--accent); text-align: right; display: flex; align-items: center; justify-content: flex-end;"><span id="selectedCount">0 Seçildi</span></div>
@@ -75,176 +74,448 @@
 
         <div class="progress-wrap" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
         <div class="scroll-body" id="resultList">
-          <div class="empty-state"><p>Henüz sonuç yok.</p></div>
+          <div class="empty-state"><p>Henüz işlenmiş bir rapor bulunmuyor.</p></div>
         </div>
       </div>
 
-      <!-- GÜNLÜK -->
       <div class="panel" id="panel-logs">
-        <div class="panel-header"><h2>Günlük</h2>
+        <div class="panel-header">
+            <h2>Sistem Günlüğü (Log)</h2>
           <div class="panel-actions">
-            <label class="toggle"><input type="checkbox" id="autoScroll" checked> Otomatik</label>
-            <button class="btn-sm" onclick="clearLogs()">Temizle</button>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-muted);">
+                <input type="checkbox" id="autoScroll" checked style="accent-color: var(--accent);"> Otomatik Kaydır
+            </label>
+            <button class="btn-sm" onclick="clearLogs()">Ekranı Temizle</button>
           </div>
         </div>
         <div class="scroll-body log-container" id="logContainer"></div>
       </div>
 
-      <!-- AYARLAR -->
       <div class="panel" id="panel-config">
-        <div class="panel-header"><h2>Ayarlar</h2><button class="btn-sm btn-primary" onclick="saveConfigForm()">Kaydet</button></div>
-        <div class="scroll-body cfg-pad">
-          <div class="cfg-section"><h3>Genel</h3>
-            <div class="cfg-row"><label>Mod</label><select id="cfg_mode"><option value="gmail">Gmail</option><option value="local">Yerel</option></select></div>
-            <div class="cfg-row"><label>Çıktı</label><div class="checkbox-group"><label class="cb"><input type="checkbox" id="cfg_fmt_txt" checked> TXT</label><label class="cb"><input type="checkbox" id="cfg_fmt_csv"> CSV</label><label class="cb"><input type="checkbox" id="cfg_fmt_wa"> WA</label></div></div>
-          </div>
-          <div class="cfg-section"><h3>🔑 Google Yetkilendirme</h3>
-            <div id="authStatusArea"></div>
-            <div class="cfg-row" style="flex-direction:column;align-items:flex-start;gap:8px">
-              <div style="display:flex;gap:6px;align-items:center;width:100%">
-                <span style="font-size:12px;min-width:110px">credentials.json</span>
-                <span id="credStatus" style="font-size:11px"></span>
-                <div style="margin-left:auto;display:flex;gap:4px">
-                  <label class="btn-sm" style="cursor:pointer"><input type="file" accept=".json" onchange="uploadAuthFile('credentials',this)" style="display:none">Yükle</label>
-                  <button class="btn-sm" onclick="downloadAuthFile('credentials')">İndir</button>
+        <div class="panel-header">
+            <h2>Ayarlar</h2>
+            <span id="autoSaveStatus" style="font-size: 13px; color: var(--green); opacity: 0; transition: opacity 0.3s; font-weight: 500;">✓ Otomatik kaydedildi</span>
+        </div>
+        
+        <div class="scroll-body pad-container">
+          <div class="settings-grid">
+              
+            <div class="setting-card">
+              <div class="setting-header">
+                <h3>🚀 E-posta Tarama Modu</h3>
+                <p>Sistemin raporları nerede arayacağını belirleyin. Etikete göre arama yapmak çok daha hızlı ve hatasızdır.</p>
+              </div>
+
+              <div class="mode-selector">
+                <label class="mode-card">
+                  <input type="radio" name="searchMode" value="normal" onchange="onSearchModeChange()">
+                  <div class="mode-content">
+                    <div class="mode-icon">📥</div>
+                    <div class="mode-text">
+                      <h4>Normal Arama (Gelen Kutusu)</h4>
+                      <p>Tüm yeni mailler kontrol edilir.</p>
+                    </div>
+                  </div>
+                </label>
+                
+                <label class="mode-card">
+                  <input type="radio" name="searchMode" value="label" onchange="onSearchModeChange()">
+                  <div class="mode-content">
+                    <div class="mode-icon">🏷️</div>
+                    <div class="mode-text">
+                      <h4>Sadece Etiketleri Tara</h4>
+                      <p>Önceden etiketlenmiş mailler okunur.</p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>Sadece Okunmamış Mailler</h4>
+                  <p>Daha önce işlenmiş (okunmuş) mailleri atlar.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_only_unread">
+                    <span class="slider"></span>
+                  </label>
                 </div>
               </div>
-              <div style="display:flex;gap:6px;align-items:center;width:100%">
-                <span style="font-size:12px;min-width:110px">token.json</span>
-                <span id="tokenStatus" style="font-size:11px"></span>
-                <div style="margin-left:auto;display:flex;gap:4px">
-                  <label class="btn-sm" style="cursor:pointer"><input type="file" accept=".json" onchange="uploadAuthFile('token',this)" style="display:none">Yükle</label>
-                  <button class="btn-sm" onclick="downloadAuthFile('token')">İndir</button>
-                  <button class="btn-sm" onclick="deleteToken()" style="color:var(--red)">Sil</button>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>İşlenen Mailleri "Okundu" Yap</h4>
+                  <p>Taranıp listeye eklenen mailleri otomatik okundu işaretler.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_mark_read" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>İşlenen Mailleri Arşivle</h4>
+                  <p>Gelen kutusunu temiz tutmak için mailleri arşiv klasörüne taşır.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_archive">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 12px; background: var(--bg); padding: 16px; border-radius: 8px; margin-top: 16px;">
+                  <div style="display: flex; justify-content: space-between; width: 100%;">
+                      <div class="setting-info">
+                        <h4>📅 Belirli Bir Tarih Aralığını Tara</h4>
+                        <p>Sadece seçtiğiniz tarihler arasındaki e-postaları tarar.</p>
+                      </div>
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="cfg_date_filter_enabled">
+                        <span class="slider"></span>
+                      </label>
+                  </div>
+                  <div style="display: flex; gap: 16px; width: 100%;">
+                      <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Başlangıç</label><br><input type="date" id="cfg_date_start" class="input-full" style="margin-top:4px;"></div>
+                      <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Bitiş</label><br><input type="date" id="cfg_date_end" class="input-full" style="margin-top:4px;"></div>
+                  </div>
+              </div>
+            </div>
+
+            <div class="setting-card">
+              <div class="setting-header">
+                <h3>📄 Çıktı Formatları</h3>
+                <p>Taramalar sonucunda bilgisayarınıza kaydedilecek liste dosyası formatlarını seçin.</p>
+              </div>
+              
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>WhatsApp Çıktısı</h4>
+                  <p>WhatsApp'tan kolayca kopyalanıp atılabilecek özel ve temiz metin listesi üretir.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_fmt_wa">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>CSV Çıktısı</h4>
+                  <p>Excel gibi programlarla kolayca açılabilecek detaylı, tabloya uygun format üretir.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_fmt_csv">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>TXT Çıktısı</h4>
+                  <p>Basit ve düz metin belgesi formatında standart rapor özeti üretir.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_fmt_txt">
+                    <span class="slider"></span>
+                  </label>
                 </div>
               </div>
             </div>
-            <p class="field-hint" style="margin-top:8px">credentials.json: Google Cloud Console'dan indirin. token.json: İlk yetkilendirmede otomatik oluşur.</p>
-          </div>
-          <div class="cfg-section"><h3>Web Sunucu</h3>
-            <div class="cfg-row"><label>Host</label><input type="text" id="cfg_web_host" class="input-sm" value="127.0.0.1"></div>
-            <div class="cfg-row"><label>Port</label><input type="number" id="cfg_web_port" class="input-sm" value="5001"></div>
-          </div>
-          <div class="cfg-section"><h3>👁️ Dinleme Modu</h3>
-            <p class="hint-inline">Belirli aralıklarla yeni e-posta kontrol eder. CLI: python run.py --watch</p>
-            <div class="cfg-row"><label>Aralık (dk)</label><input type="number" id="cfg_watch_interval" min="1" value="30" class="input-sm"></div>
-            <div class="cfg-row">
-              <button class="btn-sm btn-primary" id="watchBtn" onclick="toggleWatch()">▶ Dinlemeyi Başlat</button>
-              <span id="watchStatus" style="font-size:12px;color:var(--text-muted)"></span>
+
+            <div class="setting-card">
+              <div class="setting-header">
+                <h3>📆 Randevu Ayarları</h3>
+                <p>Asansör kontrol firmalarından gelen randevu maillerinin nasıl işleneceği.</p>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>Randevuları Tara</h4>
+                  <p>Sistem, randevu bildirimlerini de arayıp listeye ekler.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_appt_enabled" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>Geçmiş Randevuları Atla</h4>
+                  <p>Tarihi geçmiş (bugünden önceki) randevu maillerini listeye almaz.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_appt_past" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <h4>Sadece Okunmamış Randevular</h4>
+                  <p>Daha önce işlenmiş (okunmuş) randevu maillerini atlar.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg_appt_unread">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row" style="border-bottom: none;">
+                <div class="setting-info">
+                  <h4>Geçmiş Arama Günü Limit</h4>
+                  <p>Randevular için en fazla kaç gün geriye dönük arama yapılacağı.</p>
+                </div>
+                <div class="setting-control">
+                  <input type="number" id="cfg_appt_days" class="input-sm" style="width: 80px;" placeholder="60">
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="cfg-section"><h3>🏷️ Etiket Yapısı</h3>
-            <p class="hint-inline">İsimleri özelleştirin. Ağaç modu: etiketler üst klasör altında gruplandırılır.</p>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_label_tree"> Ağaç yapısı (parent/child)</label></div>
-            <div class="cfg-row"><label>Üst etiket</label><input type="text" id="cfg_label_parent" class="input-full" placeholder="Asansör Raporları"></div>
-            <hr style="margin:8px 0;border-color:var(--border)">
-            <div class="cfg-row"><label>🔴 Kırmızı</label><input type="text" id="cfg_lbl_red" class="input-full" value="Kırmızı Etiketli"></div>
-            <div class="cfg-row"><label>🟡 Sarı</label><input type="text" id="cfg_lbl_yellow" class="input-full" value="Sarı Etiketli"></div>
-            <div class="cfg-row"><label>🔵 Mavi</label><input type="text" id="cfg_lbl_blue" class="input-full" value="Mavi Etiketli"></div>
-            <div class="cfg-row"><label>🟢 Yeşil</label><input type="text" id="cfg_lbl_green" class="input-full" value="Yeşil Etiketli"></div>
-            <div class="cfg-row"><label>📆 Randevu</label><input type="text" id="cfg_lbl_appt" class="input-full" value="Randevu"></div>
-          </div>
-          <div class="cfg-section"><h3>Dosya Yolları</h3>
-            <p class="hint-inline">Termux'ta /storage/shared/ kullanmak için önce <code>termux-setup-storage</code> komutunu çalıştırın.</p>
-            <div class="cfg-row"><label>PDF'ler</label><div class="path-row"><input type="text" id="cfg_path_dl" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_dl')">📁</button></div></div>
-            <div class="cfg-row"><label>Çıktılar</label><div class="path-row"><input type="text" id="cfg_path_output" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_output')">📁</button></div></div>
-            <div class="cfg-row"><label>Veritabanı</label><div class="path-row"><input type="text" id="cfg_path_db" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_db')">📁</button></div></div>
-            <div class="cfg-row"><label>Log</label><div class="path-row"><input type="text" id="cfg_path_log" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_log')">📁</button></div></div>
-          </div>
-          <div class="cfg-section"><h3>E-posta Arama</h3>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_search_by_label"> Etikete göre ara</label></div>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_only_unread"> Sadece okunmamış</label></div>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_mark_read" checked> Okundu yap</label></div>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_archive"> Arşivle</label></div>
-            <div class="cfg-row"><label>Worker</label><input type="number" id="cfg_workers" min="1" max="50" value="10" class="input-sm"></div>
-            <div class="cfg-row"><label>Son X gün</label><input type="number" id="cfg_search_days" min="0" value="0" class="input-sm"></div>
-            
-            <!-- TARİH ARALIĞI FİLTRESİ -->
-            <div class="cfg-row" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
-              <label class="cb"><input type="checkbox" id="cfg_date_filter_enabled"> Özel Tarih Aralığında Ara</label>
+
+            <div class="setting-card">
+              <div class="setting-header">
+                <h3>🔑 Google Hesabı Bağlantısı</h3>
+                <p>Uygulamanın Gmail hesabınıza erişebilmesi için gerekli izin dosyaları.</p>
+              </div>
+              <div id="authStatusArea"></div>
+              
+              <div class="setting-row" style="background: var(--bg); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                  <div class="setting-info">
+                      <h4>Kimlik Dosyası (credentials.json)</h4>
+                      <p id="credStatus" style="font-weight: 500;"></p>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                      <label class="btn-sm" style="background: var(--bg-card); cursor:pointer;"><input type="file" accept=".json" onchange="uploadAuthFile('credentials',this)" style="display:none">Yükle</label>
+                      <button class="btn-sm" style="background: var(--bg-card);" onclick="downloadAuthFile('credentials')">İndir</button>
+                  </div>
+              </div>
+
+              <div class="setting-row" style="background: var(--bg); padding: 12px; border-radius: 8px;">
+                  <div class="setting-info">
+                      <h4>Erişim Jetonu (token.json)</h4>
+                      <p id="tokenStatus" style="font-weight: 500;"></p>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                      <label class="btn-sm" style="background: var(--bg-card); cursor:pointer;"><input type="file" accept=".json" onchange="uploadAuthFile('token',this)" style="display:none">Yükle</label>
+                      <button class="btn-sm" style="background: var(--bg-card);" onclick="downloadAuthFile('token')">İndir</button>
+                      <button class="btn-sm danger" onclick="deleteToken()">Bağlantıyı Kes</button>
+                  </div>
+              </div>
             </div>
-            <div class="cfg-row"><label>Başlangıç</label><input type="date" id="cfg_date_start" class="input-sm"></div>
-            <div class="cfg-row"><label>Bitiş</label><input type="date" id="cfg_date_end" class="input-sm"></div>
-            <p class="hint-inline" style="margin-top:4px;">Not: Bu aktifse "Son X gün" kuralı dikkate alınmaz.</p>
+
+            <div class="setting-card">
+              <div class="setting-header">
+                <h3>🏢 Rapor Kaynakları (Firmalar / Binalar)</h3>
+                <p>Hangi göndericiden gelen mailin hangi bina/firma olduğunu buradan ekleyebilirsiniz.</p>
+              </div>
+              
+              <div id="sourcesContainer" style="display: flex; flex-direction: column; gap: 12px;"></div>
+              
+              <button class="btn-sm" onclick="addSourceRow('', '', 'adetsis')" style="margin-top: 16px; width: 100%; border-style: dashed; padding: 12px; background: var(--bg-hover);">
+                + Yeni Bir Kaynak Tanımla
+              </button>
+            </div>
+
+            <div>
+                <button class="advanced-toggle" onclick="this.nextElementSibling.classList.toggle('open')">
+                    ⚙️ Gelişmiş Ayarları Göster / Gizle
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                
+                <div class="advanced-content">
+                    
+                    <div class="setting-card">
+                        <div class="setting-header"><h3>Sistem İletişimi & Otomatik İzleme</h3></div>
+                        <div class="cfg-row"><label>Tarama Motoru Modu</label><select id="cfg_mode" class="input-full"><option value="gmail">Gmail API</option><option value="local">Yerel (Local)</option></select></div>
+                        <div class="cfg-row"><label>Ana Sunucu IP</label><input type="text" id="cfg_web_host" class="input-full"></div>
+                        <div class="cfg-row"><label>Bağlantı Portu</label><input type="number" id="cfg_web_port" class="input-full"></div>
+                        <hr style="margin: 16px 0; border-color: var(--border);">
+                        <div class="cfg-row"><label>Otomatik Dinleme (Dk)</label><input type="number" id="cfg_watch_interval" class="input-full" placeholder="Kaç dakikada bir taransın?"></div>
+                        <div class="cfg-row" style="margin-top: 10px;">
+                            <button class="btn-sm primary" id="watchBtn" onclick="toggleWatch()" style="width: 100%;">▶ Arka Plan Taramasını Başlat</button>
+                        </div>
+                        <p id="watchStatus" style="font-size: 13px; margin-top: 6px; text-align: center; color: var(--text-muted);"></p>
+                    </div>
+
+                    <div class="setting-card">
+                        <div class="setting-header"><h3>📂 Dosya ve Klasör Yolları</h3></div>
+                        <div class="cfg-row"><label>İndirilen PDF'ler</label><div class="path-row"><input type="text" id="cfg_path_dl" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_dl')">Seç</button></div></div>
+                        <div class="cfg-row"><label>Dışa Aktarılanlar</label><div class="path-row"><input type="text" id="cfg_path_output" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_output')">Seç</button></div></div>
+                        <div class="cfg-row"><label>Veritabanı Dosyası</label><div class="path-row"><input type="text" id="cfg_path_db" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_db')">Seç</button></div></div>
+                        <div class="cfg-row"><label>Log Kayıtları</label><div class="path-row"><input type="text" id="cfg_path_log" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_path_log')">Seç</button></div></div>
+                    </div>
+
+                    <div class="setting-card">
+                        <div class="setting-header"><h3>🏷️ Etiket ve Filtre Özelleştirmeleri</h3></div>
+                        <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_label_tree"> Gmail'de Ağaç Yapısı Kullan (Alt etiketleme)</label></div>
+                        <div class="cfg-row"><label>Kapsayıcı Üst Etiket</label><input type="text" id="cfg_label_parent" class="input-full" placeholder="Örn: Asansör Denetimleri"></div>
+                        <hr style="margin: 16px 0; border-color: var(--border);">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div><label style="font-size:12px;color:var(--text-muted)">Kırmızı Etiket Adı</label><input type="text" id="cfg_lbl_red" class="input-full"></div>
+                            <div><label style="font-size:12px;color:var(--text-muted)">Kırmızı Gün Limiti</label><input type="number" id="cfg_days_red" class="input-full"></div>
+                            <div><label style="font-size:12px;color:var(--text-muted)">Sarı Etiket Adı</label><input type="text" id="cfg_lbl_yellow" class="input-full"></div>
+                            <div><label style="font-size:12px;color:var(--text-muted)">Sarı Gün Limiti</label><input type="number" id="cfg_days_yellow" class="input-full"></div>
+                            <div><label style="font-size:12px;color:var(--text-muted)">Mavi Etiket Adı</label><input type="text" id="cfg_lbl_blue" class="input-full"></div>
+                            <div><label style="font-size:12px;color:var(--text-muted)">Yeşil Etiket Adı</label><input type="text" id="cfg_lbl_green" class="input-full"></div>
+                        </div>
+                        <div class="cfg-row" style="margin-top:12px;"><label>Randevu Etiketi</label><input type="text" id="cfg_lbl_appt" class="input-full"></div>
+                        
+                        <hr style="margin: 16px 0; border-color: var(--border);">
+                        <div class="cfg-row"><label>Aranacak Etiketler</label><input type="text" id="cfg_target_labels" class="input-full" placeholder="Kırmızı Etiketli, Sarı Etiketli..."></div>
+                        <div class="cfg-row"><label>Dışlanan Kelimeler</label><input type="text" id="cfg_ex_keywords" class="input-full" placeholder="Hariç tutulacak konu başlıkları"></div>
+                        <div class="cfg-row"><label>Dışlanan Göndericiler</label><input type="text" id="cfg_ex_senders" class="input-full" placeholder="İstenmeyen e-posta adresleri"></div>
+                    </div>
+
+                    <div class="setting-card">
+                        <div class="setting-header"><h3>🔄 Veritabanı Ayarları</h3></div>
+                        
+                        <div class="setting-row">
+                          <div class="setting-info">
+                            <h4>Tüm Veritabanını Yeniden İşle</h4>
+                            <p>Zaten listelenmiş dosyaları DB'de göz ardı et ve baştan oku.</p>
+                          </div>
+                          <div class="setting-control">
+                            <label class="toggle-switch">
+                              <input type="checkbox" id="cfg_force_reprocess">
+                              <span class="slider"></span>
+                            </label>
+                          </div>
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-info">
+                            <h4>Tekrarlanan PDF İndirmelerini Atla</h4>
+                            <p>Aynı dosya sunucuda varsa tekrar indirmeyi engeller.</p>
+                          </div>
+                          <div class="setting-control">
+                            <label class="toggle-switch">
+                              <input type="checkbox" id="cfg_skip_dup" checked>
+                              <span class="slider"></span>
+                            </label>
+                          </div>
+                        </div>
+                        
+                        <div class="cfg-row" style="margin-top:16px;">
+                            <label>Sistem İş Parçacığı (Worker)</label>
+                            <input type="number" id="cfg_workers" class="input-full" max="50">
+                        </div>
+                        <div class="cfg-row">
+                            <label>Geçmiş Arama Günü (Sıfır=Tümü)</label>
+                            <input type="number" id="cfg_search_days" class="input-full">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-card">
+                        <div class="setting-header"><h3>📁 Manuel PDF İşleme Klasörleri</h3></div>
+                        <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_manual_enabled"> Klasör Dinlemeyi Etkinleştir</label></div>
+                        <div class="cfg-row"><label>Girdi Klasörü</label><div class="path-row"><input type="text" id="cfg_manual_path" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_manual_path')">Seç</button></div></div>
+                        <div class="cfg-row"><label>İşlenenler Klasörü</label><div class="path-row"><input type="text" id="cfg_manual_proc" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_manual_proc')">Seç</button></div></div>
+                    </div>
+
+                    <div class="setting-card" style="border-color: #f1c4c0;">
+                        <div class="setting-header">
+                            <h3 style="color: #c5221f;">🧹 Bakım ve Toplu Temizlik</h3>
+                            <p>Buradaki işlemler doğrudan Gmail hesabınızdaki maillere/etiketlere müdahale eder.</p>
+                        </div>
+                        
+                        <div style="background: var(--bg); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <h4 style="font-weight: 600;">1. Etiketleri E-postalardan Kaldır</h4>
+                                <div>
+                                    <label class="cb" style="margin-right: 12px;"><input type="checkbox" id="cfg_cleanup_enabled"> Etkin</label>
+                                    <label class="cb"><input type="checkbox" id="cfg_cleanup_test" checked> Sadece Test</label>
+                                </div>
+                            </div>
+                            <div id="cleanupRulesContainer"></div>
+                            <button class="btn-sm" onclick="addCleanupRule()" style="margin-top:8px">+ Yeni Kural</button>
+                            <button class="btn-action" onclick="runMaintenance('cleanup','Temizlik')" style="margin-top:12px; background: #607d8b;">Süpürme İşlemini Başlat</button>
+                        </div>
+                        
+                        <div style="background: var(--bg); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <h4 style="font-weight: 600;">2. E-postaları Çöpe Taşı</h4>
+                                <div>
+                                    <label class="cb" style="margin-right: 12px;"><input type="checkbox" id="cfg_trash_enabled"> Etkin</label>
+                                    <label class="cb"><input type="checkbox" id="cfg_trash_test" checked> Sadece Test</label>
+                                </div>
+                            </div>
+                            <div id="trashRulesContainer"></div>
+                            <button class="btn-sm" onclick="addTrashRule()" style="margin-top:8px">+ Yeni Kural</button>
+                            <button class="btn-action" onclick="runMaintenance('trash','Çöpe Taşıma')" style="margin-top:12px; background: #795548;">Çöpe Taşımayı Başlat</button>
+                        </div>
+                        
+                        <div style="background: var(--bg); padding: 16px; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <h4 style="font-weight: 600;">3. Etiketleri Kalıcı Sil (Gmail'den)</h4>
+                                <div>
+                                    <label class="cb" style="margin-right: 12px;"><input type="checkbox" id="cfg_dellabel_enabled"> Etkin</label>
+                                    <label class="cb"><input type="checkbox" id="cfg_dellabel_test" checked> Sadece Test</label>
+                                </div>
+                            </div>
+                            <input type="text" id="cfg_dellabel_labels" class="input-full" placeholder="Silinmesini istediğiniz etiket adlarını yazın">
+                            <button class="btn-action" onclick="runMaintenance('delete-labels','Etiket Silme')" style="margin-top:12px; background: var(--red);">Gmail Etiketlerini Sil</button>
+                        </div>
+                        
+                        <div style="margin-top: 24px; text-align: center;">
+                            <button class="btn-sm" onclick="clearDatabase()" style="color: var(--red); border-color: var(--red); padding: 12px 24px;">💣 Sistemin Kendi Veritabanını Tamamen Sıfırla (Geri Alınamaz)</button>
+                        </div>
+                    </div>
+
+                    <div class="setting-card">
+                        <div class="setting-header"><h3>📝 Ham JSON (Programcılar İçin)</h3></div>
+                        <textarea id="configEditor" spellcheck="false" class="input-full mono"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div style="height: 40px;"></div>
           </div>
-          <div class="cfg-section"><h3>Hedef Etiketler</h3><input type="text" id="cfg_target_labels" class="input-full" placeholder="Kırmızı Etiketli, Sarı Etiketli, Randevu"></div>
-          <div class="cfg-section"><h3>Kaynaklar</h3>
-            <div id="sourcesContainer"></div>
-            <button class="btn-sm" onclick="addSourceRow()" style="margin-top:8px">+ Kaynak Ekle</button>
-          </div>
-          <div class="cfg-section"><h3>Filtreler</h3>
-            <div class="cfg-row"><label>Hariç Kelime</label><input type="text" id="cfg_ex_keywords" class="input-full"></div>
-            <div class="cfg-row"><label>Hariç Gönderen</label><input type="text" id="cfg_ex_senders" class="input-full"></div>
-          </div>
-          <div class="cfg-section"><h3>Gün Limitleri</h3>
-            <div class="cfg-row"><label>Kırmızı</label><input type="number" id="cfg_days_red" min="0" value="60" class="input-sm"></div>
-            <div class="cfg-row"><label>Sarı</label><input type="number" id="cfg_days_yellow" min="0" value="120" class="input-sm"></div>
-          </div>
-          <div class="cfg-section"><h3>Randevu</h3>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_appt_enabled" checked> Etkin</label></div>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_appt_past" checked> Geçmişi atla</label></div>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_appt_unread"> Sadece okunmamış randevular</label></div>
-            <div class="cfg-row"><label>Gün limiti</label><input type="number" id="cfg_appt_days" min="0" value="60" class="input-sm"></div>
-          </div>
-          <div class="cfg-section"><h3>Manuel Kaynak</h3>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_manual_enabled"> Etkin</label></div>
-            <div class="cfg-row"><label>Klasör</label><div class="path-row"><input type="text" id="cfg_manual_path" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_manual_path')">📁</button></div></div>
-            <div class="cfg-row"><label>İşlenenler</label><div class="path-row"><input type="text" id="cfg_manual_proc" class="input-full"><button class="btn-browse" onclick="browseFolder('cfg_manual_proc')">📁</button></div></div>
-          </div>
-          <div class="cfg-section"><h3>Veritabanı</h3>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_force_reprocess"> Zaten işlenmiş e-postaları tekrar işle</label></div>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_skip_dup" checked> Aynı içerikli tekrar indirmeleri atla</label></div>
-            <p class="hint-inline">İlk seçenek: DB'deki kayıtları yok sayar. İkinci seçenek kapalıyken: aynı rapor farklı e-postadan da gelse tekrar indirilir (MMO vb.).</p>
-          </div>
-          <div class="cfg-section collapsed"><h3 onclick="this.parentElement.classList.toggle('collapsed')">🧹 Etiket Temizleme ▾</h3>
-            <p class="hint-inline">E-postalardan etiket kaldırır (e-posta silinmez)</p>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_cleanup_enabled"> Etkin</label><label class="cb"><input type="checkbox" id="cfg_cleanup_test" checked> Test Modu</label></div>
-            <div id="cleanupRulesContainer"></div>
-            <button class="btn-sm" onclick="addCleanupRule()" style="margin-top:8px">+ Kural Ekle</button>
-            <div class="cfg-row" style="margin-top:12px"><button class="btn-action" onclick="runMaintenance('cleanup','Temizlik')">🧹 Temizliği Çalıştır</button></div>
-          </div>
-          <div class="cfg-section collapsed"><h3 onclick="this.parentElement.classList.toggle('collapsed')">🏷️ Etiket Sil ▾</h3>
-            <p class="hint-inline">Gmail etiketlerini kalıcı olarak siler</p>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_dellabel_enabled"> Etkin</label><label class="cb"><input type="checkbox" id="cfg_dellabel_test" checked> Test Modu</label></div>
-            <div class="cfg-row"><label>Silinecek Etiketler</label><input type="text" id="cfg_dellabel_labels" class="input-full" placeholder="Etiket1, Etiket2"></div>
-            <div class="cfg-row" style="margin-top:12px"><button class="btn-action" onclick="runMaintenance('delete-labels','Etiket Silme')">🏷️ Etiketleri Sil</button></div>
-          </div>
-          <div class="cfg-section collapsed"><h3 onclick="this.parentElement.classList.toggle('collapsed')">🗑 Çöpe Taşı ▾</h3>
-            <p class="hint-inline">Eşleşen e-postaları Gmail çöpüne taşır</p>
-            <div class="cfg-row"><label class="cb"><input type="checkbox" id="cfg_trash_enabled"> Etkin</label><label class="cb"><input type="checkbox" id="cfg_trash_test" checked> Test Modu</label></div>
-            <div id="trashRulesContainer"></div>
-            <button class="btn-sm" onclick="addTrashRule()" style="margin-top:8px">+ Kural Ekle</button>
-            <div class="cfg-row" style="margin-top:12px"><button class="btn-action" onclick="runMaintenance('trash','Çöpe Taşıma')">🗑 Çöpe Taşı</button></div>
-          </div>
-          <div class="cfg-section collapsed"><h3 onclick="this.parentElement.classList.toggle('collapsed')">📝 Ham JSON ▾</h3>
-            <textarea id="configEditor" spellcheck="false" class="input-full mono"></textarea></div>
-          <!-- Alt boşluk — en alttaki bölümlerin de görünmesini sağlar -->
-          <div style="height:80px"></div>
         </div>
       </div>
 
-      <!-- SCRAPING -->
       <div class="panel" id="panel-scraping">
-        <div class="panel-header"><h2>Scraping Profilleri</h2><button class="btn-sm btn-primary" onclick="saveProfiles()">Kaydet</button></div>
-        <div class="scraping-editor"><textarea id="profileEditor" spellcheck="false"></textarea></div>
+        <div class="panel-header">
+            <h2>PDF Veri Çıkarma Profilleri</h2>
+            <button class="btn-sm primary" onclick="saveProfiles()">Profilleri Kaydet</button>
+        </div>
+        <div class="scraping-editor">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Buradaki JSON kuralları, indirilen PDF dosyalarının içindeki formatları tanımak için kullanılır. Teknik bilginiz yoksa lütfen değiştirmeyin.</p>
+            <textarea id="profileEditor" spellcheck="false"></textarea>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
   <div class="drawer" id="drawer">
-    <div class="drawer-header"><h3 id="drawerTitle">Rapor</h3><button class="btn-icon" onclick="closeDrawer()">✕</button></div>
+    <div class="drawer-header"><h3 id="drawerTitle" style="font-size: 16px; font-weight: 600;">Rapor</h3><button class="btn-icon" onclick="closeDrawer()">✕</button></div>
     <div class="drawer-body" id="drawerBody"></div>
     <div class="drawer-footer" id="drawerFooter"></div>
   </div>
-  <!-- AUTH -->
-  <div id="authModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:center;justify-content:center">
-    <div style="background:var(--bg-card);border-radius:16px;padding:24px;max-width:440px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,.3);text-align:center">
-      <div style="font-size:40px;margin-bottom:12px">🔐</div>
-      <h3 style="margin-bottom:8px;font-size:18px">Google Yetkilendirmesi Gerekiyor</h3>
-      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Gmail'e erişim için Google hesabınızla onay vermeniz gerekiyor. Aşağıdaki butona tıklayın, onay verin, sonra bu sayfaya dönün.</p>
-      <a id="authLink" href="#" target="_blank" style="display:inline-block;padding:12px 24px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px">Google ile Oturum Aç</a>
-      <p style="color:var(--text-muted);font-size:11px;margin-top:12px">Onay verdikten sonra bu pencere otomatik kapanacak.</p>
+  
+  <div id="authModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;align-items:center;justify-content:center">
+    <div style="background:var(--bg-card);border-radius:20px;padding:32px;max-width:440px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.3);text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">🔐</div>
+      <h3 style="margin-bottom:12px;font-size:20px;color:var(--text);">Google Yetkilendirmesi Gerekiyor</h3>
+      <p style="color:var(--text-muted);font-size:14px;line-height:1.5;margin-bottom:24px">Asansör Denetçisi'nin e-postalarınızı okuyabilmesi için güvenli bir şekilde Google hesabınızla giriş yapmanız gerekmektedir. İşlem tarayıcınızda gerçekleşecektir.</p>
+      <a id="authLink" href="#" target="_blank" style="display:inline-block;padding:14px 28px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Google ile Devam Et</a>
+      <p style="color:var(--text-muted);font-size:12px;margin-top:20px;opacity:0.8;">İzin verdikten sonra bu pencere otomatik olarak kapanacaktır.</p>
     </div>
   </div>
 
