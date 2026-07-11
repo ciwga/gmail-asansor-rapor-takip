@@ -91,7 +91,7 @@ def _get_requirements() -> List[str]:
 
 setup(
     name="asansor-denetcisi",
-    version="1.3.0",
+    version="1.4.0",
     description="Gmail üzerinden A tipi muayene kuruluşlarından (MMO, ARTIBEL, ASANSÖR KONTROL, KENT GRUP BELGELENDİRME, OPTİMAL DENGE) gelen asansör raporu maillerini işleyen, etiketleyen ve WhatsApp'tan paylaşılabilir takip listesi oluşturan otomasyon.",
     author="ciwga",
     
