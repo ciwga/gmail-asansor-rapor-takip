@@ -1,23 +1,22 @@
 """Çözümleme filtresi: Hangi bina/asansörlerin halihazırda daha yeni ve olumlu bir rapora
-sahip olduğunu takip eder, böylece eski olumsuz raporların işlenmesi atlanabilir.
+sahip olduğunu takip eder.
 """
 
 import re
 from typing import Dict, Optional, Any
 
-from app.utils.text import to_lower_tr
-
 
 class ResolutionFilter:
     """Olumlu (Yeşil veya Mavi etiketli) raporların bellek içi bir dizinini tutar.
 
-    Bir aday rapor kontrol edilirken, eğer aynı bina veya asansör için sistemde 
+    Bir aday rapor kontrol edilirken, eğer aynı ASANSÖR için sistemde 
     daha yeni tarihli bir çözümleme (olumlu rapor) mevcutsa, aday raporun 
-    işlenmesi atlanır.
+    işlenmesi atlanır. Çoklu asansör riskine karşı bina adı ile eşleşmeler 
+    göz ardı edilir.
 
     Attributes:
-        _id_map (Dict[str, float]): Bina kimlik anahtarı -> zaman damgası eşleşmesi.
-        _name_map (Dict[str, float]): Bina isim anahtarı -> zaman damgası eşleşmesi.
+        _id_map (Dict[str, float]): Asansör kimlik anahtarı -> zaman damgası eşleşmesi.
+        _name_map (Dict[str, float]): Bina isim anahtarı -> zaman damgası eşleşmesi (Geriye dönük uyumluluk için tutulur ancak filtrelemede pasiftir).
     """
 
     def __init__(self) -> None:
@@ -64,7 +63,11 @@ class ResolutionFilter:
                 self._name_map[meta["name"]] = ts
 
     def is_resolved(self, subject: str, snippet: str, sender: str, date_ms: int) -> bool:
-        """Bu rapor için sistemde daha yeni bir çözümleme olup olmadığını kontrol eder.
+        """Bu asansör için sistemde daha yeni bir çözümleme olup olmadığını kontrol eder.
+
+        Çoklu asansörü olan binalarda (Örn: 3 Mavi, 1 Kırmızı asansör) hatalı atlamaları 
+        önlemek için, sadece kesin Asansör Kimlik Numarası (AK-) biliniyorsa filtreleme yapılır.
+        Bina adı veya genel bina ID'si eşleşmeleri güvenli olmadığı için es geçilir.
 
         Args:
             subject (str): E-posta konu başlığı.
@@ -73,24 +76,23 @@ class ResolutionFilter:
             date_ms (int): Milisaniye cinsinden kontrol edilecek raporun tarihi.
 
         Returns:
-            bool: Eğer daha yeni bir olumlu rapor varsa True, aksi halde False.
+            bool: Eğer aynı ASANSÖR için daha yeni bir olumlu rapor varsa True, aksi halde False.
         """
         meta: Dict[str, Any] = self._extract_meta(subject, snippet, sender)
         ts: float = date_ms / 1000.0
 
-        if meta.get("id") and meta["id"] in self._id_map:
-            if self._id_map[meta["id"]] > ts:
-                return True
-
-        if meta.get("name") and meta["name"] in self._name_map:
-            if self._name_map[meta["name"]] > ts:
-                return True
-
+        # Sadece kesin ve benzersiz ID'ye (Asansör Kimlik No) göre eşleşme yap.
+        # AK- öneki Asansör Kimlik Numarasını temsil eder.
+        if meta.get("id"):
+            if meta["id"].startswith("AK-") and meta["id"] in self._id_map:
+                if self._id_map[meta["id"]] > ts:
+                    return True
+        
         return False
 
     @staticmethod
     def _extract_meta(subject: str, snippet: str, sender: str) -> Dict[str, Any]:
-        """E-posta üstbilgilerinden bina kimliğini ve adını ayıklar.
+        """E-posta üstbilgilerinden bina/asansör kimliğini ve adını ayıklar.
 
         Args:
             subject (str): E-posta konu başlığı.
@@ -105,7 +107,7 @@ class ResolutionFilter:
         sender_lower: str = sender.lower()
 
         if "KIMLIKNO:" in combined:
-            m: Optional[re.Match] = re.search(r"KIMLIKNO:([\d\-]+)", combined)
+            m: Optional[re.Match[str]] = re.search(r"KIMLIKNO:([\d\-]+)", combined)
             if m:
                 meta["id"] = f"AK-{m.group(1)}"
 
@@ -124,7 +126,7 @@ class ResolutionFilter:
             if m:
                 meta["id"] = f"MMO-{m.group(1)}"
 
-        bina_match: Optional[re.Match] = re.search(
+        bina_match: Optional[re.Match[str]] = re.search(
             r"B[Iİ]NA ADI:\s*(.*?)(?:CADDE/SOKAK:|MAHALLE/KÖY:|$)", combined
         )
         
